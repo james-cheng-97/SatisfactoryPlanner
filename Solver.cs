@@ -47,12 +47,18 @@ public class Settings
     /// Buffer (400 m³, 4 m). Bigger layouts (plastic 4 -> 7 blueprints when measured).</summary>
     public bool IndustrialFluidBox { get; set; }
     public int PipeTier { get; set; }
-    /// <summary>Plastic and rubber come in as inputs (from an oil site elsewhere) instead of being made here — unless
-    /// they are what this plan makes. Saves the plastic / rubber cross loop in every factory that needs a little.</summary>
-    public bool SupplyPolymers { get; set; } = true;
+    /// <summary>Items this factory imports instead of making them (delivered like a raw resource from a site elsewhere):
+    /// plastic and rubber by default — they're usually made at a stand-alone oil site, and making a little here drags
+    /// the whole plastic / rubber refinery loop into every factory. Anything can be added (the recipe list's
+    /// "Import instead", or the Imported bar).</summary>
+    public List<string> ImportedItems { get; set; } = [.. Polymers];
     public static readonly string[] Polymers = ["Desc_Plastic_C", "Desc_Rubber_C"];
-    /// <summary>An item this plan takes as an input rather than making it (like a raw resource).</summary>
-    public bool IsSupplied(string item) => SupplyPolymers && Polymers.Contains(item) && !Targets.Any(t => t.Item == item && t.Rate > 0);
+    /// <summary>Older settings: "plastic and rubber as inputs" off → they're made here. (Read only, never written.)</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SupplyPolymers { get => null; set { if (value == false) ImportedItems.RemoveAll(i => Polymers.Contains(i)); } }
+    /// <summary>An item this plan takes as an input rather than making it (like a raw resource) — never one it's asked
+    /// to produce.</summary>
+    public bool IsSupplied(string item) => ImportedItems.Contains(item) && !Targets.Any(t => t.Item == item && t.Rate > 0);
 
     public static readonly (string cls, double rate)[] Belts =
     [

@@ -80,6 +80,10 @@
             <StackPanel Margin="10">
                 <GroupBox Header="{Binding [grp.targets], Source={x:Static local:Loc.Instance}}">
                     <StackPanel>
+                        <DockPanel Margin="0,0,0,4" ToolTip="{Binding [tip.productSearch], Source={x:Static local:Loc.Instance}}">
+                            <TextBlock DockPanel.Dock="Left" Text="🔍" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <ComboBox x:Name="ProductSearch" ItemTemplate="{StaticResource ItemTemplate}" TextSearch.TextPath="Name" MaxDropDownHeight="400"/>
+                        </DockPanel>
                         <ItemsControl x:Name="TargetsList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -96,6 +100,32 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <Button Content="{Binding [btn.addProduct], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="AddTarget_Click"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- this plan's imports: made elsewhere, delivered like raw resources (per tab, like its targets) -->
+                <GroupBox Header="{Binding [grp.imported], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,4" Text="{Binding [tip.import], Source={x:Static local:Loc.Instance}}"/>
+                        <ItemsControl x:Name="ImportedList">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#E8F0F7" BorderBrush="#9FB7CC" BorderThickness="1" CornerRadius="10" Padding="4,1,2,1" Margin="0,1,4,2">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Image Source="{Binding Icon}" Width="18" Height="18" Margin="0,0,4,0"/>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            <Button Content="✕" Tag="{Binding ClassName}" Click="RemoveImport_Click" Background="Transparent" BorderThickness="0" Padding="4,0" Margin="2,0,0,0"
+                                                    ToolTip="{Binding [tip.unimport], Source={x:Static local:Loc.Instance}}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <DockPanel Margin="0,2,0,0" ToolTip="{Binding [tip.importPick], Source={x:Static local:Loc.Instance}}">
+                            <TextBlock DockPanel.Dock="Left" Text="＋📦" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <ComboBox x:Name="ImportPicker" ItemTemplate="{StaticResource ItemTemplate}" TextSearch.TextPath="Name" MaxDropDownHeight="400"/>
+                        </DockPanel>
                     </StackPanel>
                 </GroupBox>
 
@@ -118,7 +148,6 @@
                         </DockPanel>
                         <CheckBox x:Name="AltCheck" Content="{Binding [chk.alts], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="Input_Changed"/>
                         <CheckBox x:Name="MamCheck" Content="{Binding [chk.mam], Source={x:Static local:Loc.Instance}}" Margin="0,4,0,0" Click="Input_Changed"/>
-                        <CheckBox x:Name="PolymerCheck" Content="{Binding [chk.polymers], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.polymers], Source={x:Static local:Loc.Instance}}" Margin="0,4,0,0" Click="Input_Changed"/>
                     </StackPanel>
                 </GroupBox>
 

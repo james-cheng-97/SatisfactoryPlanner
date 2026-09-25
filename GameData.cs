@@ -51,7 +51,10 @@ public class RecipeDef
         PerMin(Out.Where(a => a.Item == item).Sum(a => a.Value)) -
         PerMin(In.Where(a => a.Item == item).Sum(a => a.Value));
 
-    public string Display => (Alternate ? Loc.T("alt") : "") + Name + $"  (T{Tier}{(IsMam ? " MAM" : "")})";
+    public string Display => ClassName == ImportClass ? Name : (Alternate ? Loc.T("alt") : "") + Name + $"  (T{Tier}{(IsMam ? " MAM" : "")})";
+    /// <summary>Not a recipe: the recipe list's "Import instead" entry (the item comes from elsewhere).</summary>
+    public const string ImportClass = "__import__";
+    public static RecipeDef ImportOption() => new() { ClassName = ImportClass, Name = Loc.T("recipe.import"), In = [], Out = [], Building = "" };
     public override string ToString() => Display;
 }
 

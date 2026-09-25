@@ -36,6 +36,18 @@ public partial class MainWindow : Window
         // no game data yet (a build from source ships none: it's the wiki's / Coffee Stain's): fetch it from the wiki
         Loaded += async (_, _) => { if (GameData.Recipes.Count == 0) await UpdateFromWikiAsync(); else await FetchMissingIcons(); };
         Closing += (_, _) => SaveSettings();
+        // "what to produce": type to find an item (any part of its name, in this language or English) and add it
+        SetupItemSearch(ProductSearch, () => ProducibleItems, it =>
+        {
+            if (!_targets.Any(t => t.Item == it.ClassName)) _targets.Add(new TargetSpec { Item = it.ClassName, Rate = 10 });
+            Recalculate();
+        });
+        // imported items: made elsewhere, delivered like a raw resource
+        SetupItemSearch(ImportPicker, () => GameData.Items.Values.Where(i => !GameData.RawResources.Contains(i.ClassName) && !_settings.ImportedItems.Contains(i.ClassName)).OrderBy(i => i.Name), it =>
+        {
+            if (!_settings.ImportedItems.Contains(it.ClassName)) _settings.ImportedItems.Add(it.ClassName);
+            Recalculate();
+        });
     }
 
     void PopulateLists()
@@ -92,7 +104,6 @@ public partial class MainWindow : Window
         HandCheck.IsChecked = _settings.HandPlaceAcrossTiles;
         HandCheck.IsEnabled = _settings.BlueprintTile > 0;
         TankCheck.IsChecked = _settings.IndustrialFluidBox;
-        PolymerCheck.IsChecked = _settings.SupplyPolymers;
         MinerCombo.SelectedValue = _settings.Miner;
         ClockSlider.Value = _settings.ExtractorClock;
         ModeExact.IsChecked = _settings.Mode == RoundingMode.Exact;
@@ -122,7 +133,6 @@ public partial class MainWindow : Window
         _settings.MaxTier = (int)TierSlider.Value;
         _settings.IncludeAlternates = AltCheck.IsChecked == true;
         _settings.IncludeMam = MamCheck.IsChecked == true;
-        _settings.SupplyPolymers = PolymerCheck.IsChecked == true;
         _settings.Miner = MinerCombo.SelectedValue as string ?? "Desc_MinerMk1_C";
         _settings.ExtractorClock = ClockSlider.Value;
         _settings.Mode = ModeSteady.IsChecked == true ? RoundingMode.SteadyRate
@@ -153,6 +163,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { WarningText.Text = Loc.T("error", ex.Message); return; }
 
         MachinesGrid.ItemsSource = plan.Machines;
+        ImportedList.ItemsSource = _settings.ImportedItems.Select(GameData.Item).ToList();
         ResourcesGrid.ItemsSource = plan.Resources;
         OutputsGrid.ItemsSource = plan.Outputs;
 
@@ -262,6 +273,14 @@ public partial class MainWindow : Window
     {
         if (sender is not ComboBox cb || !(cb.IsDropDownOpen || cb.IsKeyboardFocusWithin)) return;
         if (cb.DataContext is not MachineRow row || cb.SelectedItem is not RecipeDef r || r == row.Recipe) return;
+        if (r.ClassName == RecipeDef.ImportClass)
+        {
+            // imported: made somewhere else, delivered like a raw resource
+            if (!_settings.ImportedItems.Contains(row.Item)) _settings.ImportedItems.Add(row.Item);
+            cb.IsDropDownOpen = false;
+            Dispatcher.BeginInvoke(Recalculate);
+            return;
+        }
         // pin by the recipe's main product so the manual solver and optimizer agree
         _settings.RecipeOverrides[row.Item] = r.ClassName;
         cb.IsDropDownOpen = false;
@@ -368,6 +387,7 @@ public partial class MainWindow : Window
         var st = _settings.TabState();
         st.Targets = [new TargetSpec { Item = "Desc_IronPlate_C", Rate = 10 }];
         st.RecipeOverrides = new();
+        st.ImportedItems = [.. Settings.Polymers]; // (imports belong to the plan, like its targets)
         st.Optimize = false;
         var t = new PlanTab { Name = Loc.T("tabs.plan", n), State = st, Targets = st.Targets };
         _plans.Add(t);
@@ -841,6 +861,52 @@ public partial class MainWindow : Window
     {
         _targets.Add(new TargetSpec { Item = "Desc_IronPlate_C", Rate = 10 });
         Recalculate();
+    }
+
+    void RemoveImport_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not string cls) return;
+        _settings.ImportedItems.Remove(cls);
+        Recalculate();
+    }
+
+    /// <summary>
+    /// An editable combo box as a search box: typing filters the items (any part of the name, in the UI language or
+    /// English, or the class name) — the list order doesn't matter, which in some languages (中文) is hard to scan.
+    /// Enter or a click picks the item; the box then clears.
+    /// </summary>
+    void SetupItemSearch(ComboBox cb, Func<IEnumerable<ItemDef>> source, Action<ItemDef> pick)
+    {
+        cb.IsEditable = true; cb.IsTextSearchEnabled = false; cb.StaysOpenOnEdit = true;
+        bool busy = false;
+        List<ItemDef> Filter(string t) => source().Where(i => t.Length == 0 || i.Name.Contains(t, StringComparison.CurrentCultureIgnoreCase)
+            || i.EnglishName.Contains(t, StringComparison.OrdinalIgnoreCase) || i.ClassName.Contains(t, StringComparison.OrdinalIgnoreCase)).Take(300).ToList();
+        void Pick(ItemDef? it)
+        {
+            if (it == null) return;
+            busy = true; cb.IsDropDownOpen = false; cb.SelectedIndex = -1; cb.Text = ""; busy = false;
+            pick(it);
+        }
+        cb.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new TextChangedEventHandler((_, _) =>
+        {
+            if (busy || cb.SelectedItem != null) return;
+            var box = cb.Template.FindName("PART_EditableTextBox", cb) as TextBox;
+            string text = cb.Text; int caret = box?.CaretIndex ?? text.Length;
+            busy = true;
+            cb.ItemsSource = Filter(text.Trim());
+            cb.Text = text;
+            if (box != null) box.CaretIndex = Math.Min(caret, text.Length);
+            busy = false;
+            cb.IsDropDownOpen = text.Trim().Length > 0 && cb.Items.Count > 0;
+        }));
+        cb.DropDownOpened += (_, _) => { if (!busy && cb.ItemsSource == null) { busy = true; cb.ItemsSource = Filter(""); busy = false; } };
+        // a click in the list picks; arrow keys only move the highlight (Enter picks)
+        cb.DropDownClosed += (_, _) => { if (!busy && cb.SelectedItem is ItemDef it && Mouse.LeftButton == MouseButtonState.Released && cb.IsKeyboardFocusWithin) Pick(it); };
+        cb.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { Pick(cb.SelectedItem as ItemDef ?? cb.Items.OfType<ItemDef>().FirstOrDefault()); e.Handled = true; }
+            else if (e.Key == Key.Escape) { busy = true; cb.IsDropDownOpen = false; cb.Text = ""; busy = false; }
+        };
     }
 
     void RemoveTarget_Click(object sender, RoutedEventArgs e)

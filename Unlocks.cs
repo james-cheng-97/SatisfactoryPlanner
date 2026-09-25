@@ -22,7 +22,8 @@ public static class Unlocks
 {
     const double Penalty = 1000;
 
-    static List<string> Imports(SolveResult r) => r.Inputs.Where(i => !GameData.RawResources.Contains(i)).ToList();
+    // inputs the plan can't make — not raw resources, and not items it imports on purpose (those aren't missing unlocks)
+    static List<string> Imports(SolveResult r, Settings s) => r.Inputs.Where(i => !GameData.RawResources.Contains(i) && !s.IsSupplied(i)).ToList();
     static string Names(IEnumerable<string> items) => string.Join(", ", items.Select(i => GameData.Item(i).Name));
 
     public static (string summary, bool notPossible, List<UnlockSuggestion> list) Suggest(Settings current, CancellationToken ct)
@@ -30,7 +31,7 @@ public static class Unlocks
         var baseS = current.Clone(); baseS.Optimize = true;
         var baseline = Optimizer.Solve(baseS);
         var list = new List<UnlockSuggestion>();
-        var imports = Imports(baseline);
+        var imports = Imports(baseline, baseS);
         var summary = "";
         bool notPossible = false;
 
@@ -39,7 +40,7 @@ public static class Unlocks
             ct.ThrowIfCancellationRequested();
             var req = baseS.Clone(); req.IgnoreRecipeLocks = true; req.LockedPenalty = Penalty;
             var sol = Optimizer.Solve(req);
-            var still = Imports(sol);
+            var still = Imports(sol, req);
             if (still.Count > 0)
             {
                 // impossible within the milestone cap: find the tier where it becomes possible
@@ -48,7 +49,7 @@ public static class Unlocks
                 {
                     ct.ThrowIfCancellationRequested();
                     var up = req.Clone(); up.MaxTier = t; up.Unlocked = null; up.IncludeAlternates = up.IncludeMam = true;
-                    if (Imports(Optimizer.Solve(up)).Count == 0) need = t;
+                    if (Imports(Optimizer.Solve(up), up).Count == 0) need = t;
                 }
                 summary = Loc.T("unlock.notPossible", current.MaxTier, Names(still)) +
                           (need != null ? Loc.T("unlock.untilTier", need) : Loc.T("unlock.checkResources"));

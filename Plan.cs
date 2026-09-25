@@ -166,7 +166,7 @@ public class Plan
             var row = new MachineRow
             {
                 Item = item,
-                Options = s.OptionsFor(item),
+                Options = [RecipeDef.ImportOption(), .. s.OptionsFor(item)],
                 Recipe = r,
                 Exact = flow,
                 Count = count,
