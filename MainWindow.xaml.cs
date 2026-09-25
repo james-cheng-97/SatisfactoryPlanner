@@ -186,7 +186,10 @@ public partial class MainWindow : Window
         catch (Exception ex) { WarningText.Text = Loc.T("error", ex.Message); return; }
         if (PolymerLoop.Applies(_settings) && PolymerLoop.IsOn(_settings)) plan.Warnings.Insert(0, Loc.T("loop.seed"));
 
-        MachinesGrid.ItemsSource = plan.Machines;
+        MachinesGrid.ItemsSource = plan.Machines.Where(m => !m.IsOverflow).ToList();
+        var overflowRows = plan.Machines.Where(m => m.IsOverflow).ToList();
+        OverflowGrid.ItemsSource = overflowRows;
+        OverflowSection.Visibility = overflowRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         ImportedList.ItemsSource = _settings.ImportedItems.Select(GameData.Item).ToList();
         ResourcesGrid.ItemsSource = plan.Resources;
         OutputsGrid.ItemsSource = plan.Outputs;
@@ -209,12 +212,23 @@ public partial class MainWindow : Window
         try { Tree.Render(plan); }
         catch (Exception ex) { Tree.Children.Clear(); plan.Warnings.Add(Loc.T("error", ex.Message)); }
         var scaleText = Math.Abs(plan.Scale - 1) < 1e-9 ? "" : Loc.T("summary.scale", plan.Scale);
-        SummaryText.Text = (_settings.CountExtractors
-            ? Loc.T("summary.withExtractors", plan.ProductionMachines + plan.Extractors, plan.Extractors, plan.Power)
-            : Loc.T("summary", plan.ProductionMachines, plan.Power)) + scaleText
-            + (plan.SplitterParts + plan.MergerParts + plan.JunctionParts > 0
-                ? Loc.T("summary.logistics", plan.SplitterParts, plan.MergerParts, plan.JunctionParts) : "")
-            + (plan.ValveParts > 0 ? Loc.T("summary.valves", plan.ValveParts) : "");
+        // headline cards
+        KpiMachinesValue.Text = (plan.ProductionMachines + (_settings.CountExtractors ? plan.Extractors : 0)).ToString();
+        KpiMachinesSub.Text = _settings.CountExtractors ? Loc.T("kpi.machinesSub", plan.Extractors) : Loc.T("kpi.machinesNoExt", plan.Extractors);
+        double generated = -plan.Machines.Where(m => m.Recipe.PowerOut > 0).Sum(m => m.Power);
+        KpiPowerValue.Text = $"{plan.Power:0} MW";
+        KpiPowerSub.Text = generated > 0 ? Loc.T("kpi.powerGen", generated) : Loc.T("kpi.powerSub");
+        var raws = plan.Resources.OrderBy(r => r.Item == "Desc_Water_C" ? 1 : 0).ThenByDescending(r => r.Rate).ToList();
+        KpiInputsValue.Text = raws.Count.ToString();
+        KpiInputsSub.Text = string.Join(" · ", raws.Take(3).Select(r => $"{r.ItemName} {r.Rate:0.#}"));
+        KpiClogValue.Text = open > 0 ? Loc.T("kpi.clogOpen", open) : resolved > 0 ? Loc.T("kpi.clogAll") : Loc.T("kpi.clogNone");
+        KpiClogSub.Text = open > 0 ? Loc.T("kpi.clogOpenSub", resolved) : resolved > 0 ? Loc.T("kpi.clogAllSub", resolved) : Loc.T("kpi.clogNoneSub");
+        KpiClogCard.Background = (System.Windows.Media.Brush)FindResource(open > 0 ? "B.WarnSoft" : "B.GoodSoft");
+        KpiClogValue.Foreground = (System.Windows.Media.Brush)FindResource(open > 0 ? "B.Warn" : "B.Good");
+        // the smaller facts under the cards
+        SummaryText.Text = (plan.SplitterParts + plan.MergerParts + plan.JunctionParts > 0
+                ? Loc.T("summary.logistics", plan.SplitterParts, plan.MergerParts, plan.JunctionParts).TrimStart(' ', '·') : "")
+            + (plan.ValveParts > 0 ? Loc.T("summary.valves", plan.ValveParts) : "") + scaleText;
         _active.Summary = Loc.T("summary", plan.ProductionMachines + (_settings.CountExtractors ? plan.Extractors : 0), plan.Power).Replace("   ", " ");
         TierLabel.Text = Loc.T("tier", _settings.MaxTier);
         WarningText.Text = string.Join("\n", plan.Warnings.Distinct());

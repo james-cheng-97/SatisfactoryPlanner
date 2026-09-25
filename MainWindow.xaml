@@ -261,9 +261,40 @@
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
             <StackPanel>
+                <!-- headline numbers -->
+                <UniformGrid Columns="4" Margin="0,0,-10,10">
+                    <Border x:Name="KpiMachinesCard" Style="{StaticResource Card}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [kpi.machines], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
+                            <TextBlock x:Name="KpiMachinesValue" FontFamily="{StaticResource F.Display}" FontSize="26" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="KpiMachinesSub" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="KpiPowerCard" Style="{StaticResource Card}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [kpi.power], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
+                            <TextBlock x:Name="KpiPowerValue" FontFamily="{StaticResource F.Display}" FontSize="26" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="KpiPowerSub" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="KpiInputsCard" Style="{StaticResource Card}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [kpi.inputs], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
+                            <TextBlock x:Name="KpiInputsValue" FontFamily="{StaticResource F.Display}" FontSize="26" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="KpiInputsSub" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="KpiClogCard" Style="{StaticResource Card}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [kpi.clog], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
+                            <TextBlock x:Name="KpiClogValue" FontFamily="{StaticResource F.Display}" FontSize="26" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="KpiClogSub" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
                 <DockPanel>
                     <CheckBox DockPanel.Dock="Right" x:Name="CountExtractorsCheck" Content="{Binding [chk.countExtractors], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Click="Input_Changed"/>
-                    <TextBlock x:Name="SummaryText" FontFamily="{StaticResource F.Display}" FontSize="22" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="SummaryText" Foreground="{StaticResource B.Muted}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </DockPanel>
                 <TextBlock x:Name="WarningText" Foreground="{StaticResource B.Warn}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding [hint.production], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" Margin="0,4,0,0"/>
@@ -271,7 +302,44 @@
 
             <TabControl Grid.Row="1" x:Name="MainTabs" SelectionChanged="MainTabs_SelectionChanged">
                 <TabItem Header="{Binding [tab.table], Source={x:Static local:Loc.Instance}}">
-            <DataGrid x:Name="MachinesGrid">
+            <DockPanel>
+            <!-- machines of the overflow chains (set in Clog guards): their own table, under the main one -->
+            <StackPanel x:Name="OverflowSection" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,12,0,0">
+                <DockPanel Margin="0,0,0,6">
+                    <TextBlock Text="{Binding [hdr.overflow], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding [hint.overflowRow], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" VerticalAlignment="Center"/>
+                </DockPanel>
+                <DataGrid x:Name="OverflowGrid" IsReadOnly="True" MaxHeight="220">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{Binding [col.item], Source={x:Static local:Loc.Instance}}" Width="210">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding Icon}" Width="26" Height="26" Margin="2,0,6,0"/>
+                                        <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{Binding [col.recipe], Source={x:Static local:Loc.Instance}}" Binding="{Binding Recipe.Name}" Width="200"/>
+                        <DataGridTemplateColumn Header="{Binding [col.building], Source={x:Static local:Loc.Instance}}" Width="190">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding BuildingIcon}" Width="26" Height="26" Margin="2,0,6,0"/>
+                                        <TextBlock Text="{Binding BuildingName}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{Binding [col.machines], Source={x:Static local:Loc.Instance}}" Binding="{Binding CountText}" FontWeight="Bold"/>
+                        <DataGridTextColumn Header="{Binding [col.clock], Source={x:Static local:Loc.Instance}}" Binding="{Binding ClockText}"/>
+                        <DataGridTextColumn Header="{Binding [col.inputs], Source={x:Static local:Loc.Instance}}" Binding="{Binding Inputs}" Width="*"/>
+                        <DataGridTextColumn Header="{Binding [col.power], Source={x:Static local:Loc.Instance}}" Binding="{Binding Power, StringFormat=0.#}"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+<DataGrid x:Name="MachinesGrid">
                 <!-- overflow-chain machines are set in Clog guards: greyed, their recipe locked, a hint on hover -->
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
@@ -325,6 +393,7 @@
                     <DataGridTextColumn Header="{Binding [col.power], Source={x:Static local:Loc.Instance}}" Binding="{Binding Power, StringFormat=0.#}" IsReadOnly="True"/>
                 </DataGrid.Columns>
             </DataGrid>
+            </DockPanel>
                 </TabItem>
                 <TabItem Header="{Binding [tab.tree], Source={x:Static local:Loc.Instance}}">
                     <DockPanel>
