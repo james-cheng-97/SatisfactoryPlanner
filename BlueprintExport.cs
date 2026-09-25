@@ -629,11 +629,12 @@ public static class BlueprintExport
         (List<Entity> e, List<Link> l) Of((int, int) t) => specs.TryGetValue(t, out var v) ? v : specs[t] = (new(), new());
         foreach (var e in ents.Where(e => !byHand.Contains(e.id))) Of(TileOf(e.x, e.y)).e.Add(e);
         // each machine placed by hand takes power from one tile it touches (the one it covers most): a slot kept there
-        var handPower = new Dictionary<(int, int), int>();
+        var handPower = new Dictionary<(int, int), List<int>>(); // tile → the power floor of each machine placed by hand
         foreach (var b in L.Buildings.Where(b => b.Kind == "machine" && b.Floor < floors && s.HandPlaceAcrossTiles && Layout.CrossesTile(b, T)))
         {
             var pt = Layout.PowerTile(b, T);
-            handPower[pt] = handPower.GetValueOrDefault(pt) + 1;
+            if (!handPower.TryGetValue(pt, out var hl)) handPower[pt] = hl = new();
+            hl.Add(b.Building == "Desc_OilRefinery_C" && b.Floor + 1 < floors ? b.Floor + 1 : b.Floor);
             Of(pt); // (a tile with only hand machines nearby still gets its outlets)
         }
         if (hand.Count > 0) warnings.Add($"place by hand ({hand.Count}): " + string.Join("; ", hand));
@@ -759,82 +760,112 @@ public static class BlueprintExport
         }
         return result;
 
-        // ---- power: an 8 m × 1 m wall with wall outlets (Mk2 for Mk2 tiles, Mk3 for Mk3) wired to every machine in the
-        //      tile, outlets chained, two plug slots left free for wiring the tiles together by hand. The wall stands on
-        //      the ground (single floor) or hangs under the floor above (several floors), at the free spot nearest the
-        //      tile centre. ----
+        // ---- power: per floor, an 8 m × 1 m wall with wall outlets (Mk2 for Mk2 tiles, Mk3 for Mk3) wired to that floor's
+        //      machines, so no wire runs through a floor (user, 2026-09-25). A refinery (too tall: it reaches through the
+        //      floor above) takes power from the floor above when there is one. The wall hangs under the next floor up, or
+        //      stands on the top floor; it sits at the free spot nearest the one below (the floors' walls are joined by one
+        //      short wire straight up), the lowest nearest the tile centre. Outlets chained; two plug slots left free on the
+        //      lowest floor for wiring the tiles together by hand. ----
         void Power((int tx, int ty) t, List<Entity> te, List<Link> tl, List<Wire> tw, double ox, double oy)
         {
             var machines = te.Where(v => Ports.ContainsKey(v.cls) && !v.cls.Contains("Storage") && !v.cls.Contains("PipeStorage")).ToList();
-            int handSlots = handPower.GetValueOrDefault(t); // kept free for machines placed by hand
-            if (machines.Count + handSlots == 0) return;
+            var handFloors = handPower.GetValueOrDefault(t) ?? new List<int>(); // slots kept free for machines placed by hand
+            if (machines.Count + handFloors.Count == 0) return;
             string outletCls = dim >= 6 ? "Build_PowerPoleWall_Mk3_C" : "Build_PowerPoleWall_Mk2_C";
             int cap = dim >= 6 ? 10 : 7; // connections per outlet (same as the power pole of that tier)
-            int k = 1;
-            while (k * cap - 2 * (k - 1) - 2 < machines.Count + handSlots) k++;
-            if (k > 4) { warnings.Add($"tile {TileName(t)}: {machines.Count} machines need more than 4 outlets"); k = 4; }
-            bool hanging = L.Floors > 1;
-            // obstacles in the tile frame (cm): buildings, attachments, and (for a wall on the ground) belts
-            var rects = new List<(double x0, double x1, double y0, double y1)>();
-            foreach (var v in te.Where(v => !v.cls.Contains("Foundation")))
-            {
-                double hw = 250, hh = 250;
-                var fb = L.Buildings.FirstOrDefault(b => Math.Abs((b.X + b.W / 2) * 100 - (v.x + ox)) < 1 && Math.Abs(-(b.Y + b.H / 2) * 100 - (v.y + oy)) < 1);
-                if (fb != null) { hw = fb.W * 50; hh = fb.H * 50; }
-                rects.Add((v.x - hw - 50, v.x + hw + 50, v.y - hh - 50, v.y + hh + 50));
-            }
-            if (!hanging)
-                foreach (var ln in tl)
-                    for (int i = 1; i < ln.pts.Count; i++)
-                        rects.Add((Math.Min(ln.pts[i - 1].x, ln.pts[i].x) - 150, Math.Max(ln.pts[i - 1].x, ln.pts[i].x) + 150,
-                                   Math.Min(ln.pts[i - 1].y, ln.pts[i].y) - 150, Math.Max(ln.pts[i - 1].y, ln.pts[i].y) + 150));
+            int FloorAt(double z) { int f = 0; for (int i = 1; i < floors; i++) if (FloorTop + E(i) * 100 <= z + 1) f = i; return f; }
+            int PowerFloor(Entity m) { int f = FloorAt(m.z); return m.cls == "Build_OilRefinery_C" && f + 1 < floors ? f + 1 : f; }
+            var byFloor = machines.GroupBy(PowerFloor).ToDictionary(g => g.Key, g => g.ToList());
+            var used = byFloor.Keys.Concat(handFloors).Distinct().OrderBy(f => f).ToList();
             double half = T * 50;
-            (double x, double y)? spot = null; double bestD = double.MaxValue;
-            for (double x = -half + 150; x <= half - 150; x += 100)
-                for (double y = -half + 500; y <= half - 500; y += 100)
+            (double x, double y)? prev = null;
+            string? prevLast = null;
+            for (int gi = 0; gi < used.Count; gi++)
+            {
+                int f = used[gi];
+                var ms = byFloor.GetValueOrDefault(f) ?? new List<Entity>();
+                int handSlots = handFloors.Count(h => h == f);
+                bool lowest = gi == 0, highest = gi == used.Count - 1;
+                int links = (lowest ? 0 : 1) + (highest ? 0 : 1); // wires to the floor below / above
+                int free = lowest ? 2 : 0;                       // plug slots for wiring the tiles together
+                int k = 1;
+                while (k * cap - 2 * (k - 1) - free - links < ms.Count + handSlots) k++;
+                if (k > 4) { warnings.Add($"tile {TileName(t)} floor {f + 1}: {ms.Count} machines need more than 4 outlets"); k = 4; }
+                bool hanging = f + 1 < floors;
+                // obstacles in the tile frame (cm) on this floor: its buildings (and tall ones from below reaching up),
+                // holes in the floor it stands on / the ceiling it hangs from, and (for a wall standing) its belts
+                var rects = new List<(double x0, double x1, double y0, double y1)>();
+                foreach (var v in te.Where(v => !v.cls.Contains("Foundation")))
                 {
-                    // the wall runs north–south: 1 m × 8 m
-                    if (rects.Any(r => x + 50 > r.x0 && x - 50 < r.x1 && y + 400 > r.y0 && y - 400 < r.y1)) continue;
-                    double d = x * x + y * y;
-                    if (d < bestD) { bestD = d; spot = (x, y); }
+                    int vf = FloorAt(v.z);
+                    if (vf != f && !(vf < f && v.cls == "Build_OilRefinery_C" && vf + 1 == f)) continue;
+                    double hw = 250, hh = 250;
+                    var fb = L.Buildings.FirstOrDefault(b => Math.Abs((b.X + b.W / 2) * 100 - (v.x + ox)) < 1 && Math.Abs(-(b.Y + b.H / 2) * 100 - (v.y + oy)) < 1);
+                    if (fb != null) { hw = fb.W * 50; hh = fb.H * 50; }
+                    rects.Add((v.x - hw - 50, v.x + hw + 50, v.y - hh - 50, v.y + hh + 50));
                 }
-            if (spot == null && !hanging)
-            {
-                // crowded tile: allow the wall over belts (it may clip them) rather than leave the tile unpowered
-                var solid = rects.Take(te.Count(v => !v.cls.Contains("Foundation"))).ToList();
-                for (double x = -half + 150; x <= half - 150; x += 100)
-                    for (double y = -half + 500; y <= half - 500; y += 100)
-                    {
-                        if (solid.Any(r => x + 50 > r.x0 && x - 50 < r.x1 && y + 400 > r.y0 && y - 400 < r.y1)) continue;
-                        double d = x * x + y * y;
-                        if (d < bestD) { bestD = d; spot = (x, y); }
-                    }
-                if (spot != null) warnings.Add($"tile {TileName(t)}: power wall placed over belts (no clear spot)");
-            }
-            if (spot == null) { warnings.Add($"tile {TileName(t)}: no free 8 m × 1 m spot for the power wall"); return; }
-            double wz = hanging ? FloorTop + L.FloorElevation[1] * 100 - 100 - 100 : FloorTop; // under the 1 m foundation above
-            string wid = $"pw{t.tx}_{t.ty}";
-            te.Add(new Entity(wid, "Build_Wall_Orange_8x1_C", spot.Value.x, spot.Value.y, wz, 180));
-            var outlets = new List<string>();
-            for (int i = 0; i < k; i++)
-            {
-                string oid = $"po{t.tx}_{t.ty}_{i}";
-                te.Add(new Entity(oid, outletCls, spot.Value.x, spot.Value.y + (-300 + 200 * i), wz + 100, 180));
-                if (i > 0) tw.Add(new Wire(outlets[^1], oid));
-                outlets.Add(oid);
-            }
-            // machines to outlets, nearest first, keeping two slots free overall (on the last outlet)
-            var used = outlets.Select((_, i) => (i > 0 ? 1 : 0) + (i < outlets.Count - 1 ? 1 : 0)).ToArray();
-            used[^1] += 2;
-            // slots for machines placed by hand (they're wired in game): kept free on the outlets with most room
-            for (int h = 0; h < handSlots; h++) { int o = Enumerable.Range(0, outlets.Count).OrderBy(i => used[i]).First(); used[o]++; }
-            if (handSlots > 0) warnings.Add($"tile {TileName(t)}: {handSlots} outlet slot(s) kept for machines placed by hand");
-            foreach (var m in machines.OrderBy(m => Math.Abs(m.x - spot.Value.x) + Math.Abs(m.y - spot.Value.y)))
-            {
-                int o = Enumerable.Range(0, outlets.Count).Where(i => used[i] < cap).OrderBy(i => used[i]).FirstOrDefault(-1);
-                if (o < 0) { warnings.Add($"tile {TileName(t)}: not enough outlet slots"); break; }
-                used[o]++;
-                tw.Add(new Wire(outlets[o], m.id));
+                foreach (var h in L.Buildings.Where(b => b.Kind == "hole" && (b.Floor == f + 1 && hanging || b.Floor == f && f > 0)))
+                {
+                    double hx0 = h.X * 100 - ox, hx1 = (h.X + h.W) * 100 - ox, hy0 = -(h.Y + h.H) * 100 - oy, hy1 = -h.Y * 100 - oy;
+                    rects.Add((hx0 - 50, hx1 + 50, hy0 - 50, hy1 + 50));
+                }
+                int solidCount = rects.Count;
+                if (!hanging)
+                    foreach (var ln in tl)
+                        for (int i = 1; i < ln.pts.Count; i++)
+                        {
+                            if (FloorAt(Math.Min(ln.pts[i - 1].z, ln.pts[i].z)) != f) continue;
+                            rects.Add((Math.Min(ln.pts[i - 1].x, ln.pts[i].x) - 150, Math.Max(ln.pts[i - 1].x, ln.pts[i].x) + 150,
+                                       Math.Min(ln.pts[i - 1].y, ln.pts[i].y) - 150, Math.Max(ln.pts[i - 1].y, ln.pts[i].y) + 150));
+                        }
+                (double x, double y) aim = prev ?? (0, 0);
+                (double x, double y)? Find(List<(double x0, double x1, double y0, double y1)> rs)
+                {
+                    (double x, double y)? best = null; double bestD = double.MaxValue;
+                    for (double x = -half + 150; x <= half - 150; x += 100)
+                        for (double y = -half + 500; y <= half - 500; y += 100)
+                        {
+                            // the wall runs north–south: 1 m × 8 m
+                            if (rs.Any(r => x + 50 > r.x0 && x - 50 < r.x1 && y + 400 > r.y0 && y - 400 < r.y1)) continue;
+                            double d = (x - aim.x) * (x - aim.x) + (y - aim.y) * (y - aim.y);
+                            if (d < bestD) { bestD = d; best = (x, y); }
+                        }
+                    return best;
+                }
+                var spot = Find(rects);
+                if (spot == null && !hanging)
+                {
+                    // crowded floor: allow the wall over belts (it may clip them) rather than leave it unpowered
+                    spot = Find(rects.Take(solidCount).ToList());
+                    if (spot != null) warnings.Add($"tile {TileName(t)} floor {f + 1}: power wall placed over belts (no clear spot)");
+                }
+                if (spot == null) { warnings.Add($"tile {TileName(t)} floor {f + 1}: no free 8 m × 1 m spot for the power wall"); continue; }
+                double wz = hanging ? FloorTop + E(f + 1) * 100 - 100 - 100 : FloorTop + E(f) * 100; // under the 1 m foundation above
+                string wid = $"pw{t.tx}_{t.ty}_{f}";
+                te.Add(new Entity(wid, "Build_Wall_Orange_8x1_C", spot.Value.x, spot.Value.y, wz, 180));
+                var outlets = new List<string>();
+                for (int i = 0; i < k; i++)
+                {
+                    string oid = $"po{t.tx}_{t.ty}_{f}_{i}";
+                    te.Add(new Entity(oid, outletCls, spot.Value.x, spot.Value.y + (-300 + 200 * i), wz + 100, 180));
+                    if (i > 0) tw.Add(new Wire(outlets[^1], oid));
+                    outlets.Add(oid);
+                }
+                var load = outlets.Select((_, i) => (i > 0 ? 1 : 0) + (i < outlets.Count - 1 ? 1 : 0)).ToArray();
+                if (prevLast != null) { tw.Add(new Wire(prevLast, outlets[0])); load[0]++; } // up from the floor below
+                if (!highest) load[^1]++;                                                   // (on to the floor above)
+                load[^1] += free;
+                // slots for machines placed by hand (they're wired in game): kept free on the outlets with most room
+                for (int h = 0; h < handSlots; h++) { int o = Enumerable.Range(0, outlets.Count).OrderBy(i => load[i]).First(); load[o]++; }
+                if (handSlots > 0) warnings.Add($"tile {TileName(t)} floor {f + 1}: {handSlots} outlet slot(s) kept for machines placed by hand");
+                foreach (var m in ms.OrderBy(m => Math.Abs(m.x - spot.Value.x) + Math.Abs(m.y - spot.Value.y)))
+                {
+                    int o = Enumerable.Range(0, outlets.Count).Where(i => load[i] < cap).OrderBy(i => load[i]).FirstOrDefault(-1);
+                    if (o < 0) { warnings.Add($"tile {TileName(t)} floor {f + 1}: not enough outlet slots"); break; }
+                    load[o]++;
+                    tw.Add(new Wire(outlets[o], m.id));
+                }
+                prev = spot; prevLast = outlets[^1];
             }
         }
     }
