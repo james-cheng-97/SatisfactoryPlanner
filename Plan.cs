@@ -9,6 +9,10 @@ public class MachineRow
     public string ItemName => GameData.Item(Item).Name;
     public required List<RecipeDef> Options { get; init; }
     public required RecipeDef Recipe { get; init; }
+    /// <summary>A step of an overflow chain (processing / burning a surplus): chosen in Clog guards, not here.</summary>
+    public bool IsOverflow => Recipe.OverflowOf != null;
+    public bool CanPickRecipe => !IsOverflow;
+    public string? LockHint => IsOverflow ? Loc.T("hint.overflowRow") : null;
     public ImageSource? BuildingIcon => ImageCache.Get(Recipe.Building);
     public string BuildingName => GameData.Buildings.TryGetValue(Recipe.Building, out var b) ? b.Name : Recipe.Building;
     public double Exact { get; init; }

@@ -592,7 +592,7 @@ public partial class MainWindow : Window
             {
                 // this plan's layouts in full, other plans (restored with their plan when picked) dimmed with their targets
                 Text = (e.PlanHash == planHash ? "" : "↩ " + e.PlanSummary + "  —  ") + Loc.T("cache.entry", e.Floors, bp, e.HandPlace ? "  ✋" : "", size, e.Belt, e.Created),
-                Foreground = e.PlanHash == planHash ? SystemColors.ControlTextBrush : System.Windows.Media.Brushes.Gray,
+                Foreground = (System.Windows.Media.Brush)FindResource(e.PlanHash == planHash ? "B.Text" : "B.Muted"),
             };
             if (e.IndustrialTank) ((TextBlock)item.Content).Text += "  ·  " + Loc.T("cache.bigTank");
             CacheCombo.Items.Add(item);

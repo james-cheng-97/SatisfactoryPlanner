@@ -168,7 +168,7 @@ public class TreeDiagram : Canvas
             // rate label near the consumer end
             var label = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0),
+                Background = new SolidColorBrush(Color.FromArgb(235, 21, 23, 26)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0),
                 Child = new TextBlock { Text = $"{e.Rate:0.##} {GameData.Item(e.Item).Name}" + (plan.BeltNote(e.Item, e.Rate) is { } bn ? $" ({bn})" : ""), FontSize = 10, Foreground = brush },
                 IsHitTestVisible = false
             };
@@ -217,21 +217,22 @@ public class TreeDiagram : Canvas
     {
         var (bg, border) = n.Kind switch
         {
-            NodeKind.Raw => ("#F6EBDD", "#B07A3C"),
-            NodeKind.Import => ("#FBE3E3", "#C0392B"),
-            NodeKind.Target => ("#E2F4E6", "#2E8B57"),
-            NodeKind.Surplus => ("#EEEEEE", "#888888"),
-            _ => ("#FFFFFF", "#FA9549"),
+            // dark cards (the app's theme), the kind told by the border colour
+            NodeKind.Raw => ("#241F19", "#B07A3C"),
+            NodeKind.Import => ("#2A1C1C", "#D05A4C"),
+            NodeKind.Target => ("#1B2621", "#4FAF7C"),
+            NodeKind.Surplus => ("#202326", "#6B737C"),
+            _ => ("#1D2024", "#F28C28"),
         };
         var icons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         icons.Children.Add(new Image { Source = ImageCache.Get(n.Item), Width = 34, Height = 34 });
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = n.Title, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock { Text = n.Title, FontWeight = FontWeights.SemiBold, Foreground = Brush("#E8E6E1"), TextTrimming = TextTrimming.CharacterEllipsis });
         var sub = new StackPanel { Orientation = Orientation.Horizontal };
         if (n.Building != null) sub.Children.Add(new Image { Source = ImageCache.Get(n.Building), Width = 16, Height = 16, Margin = new Thickness(0, 0, 4, 0) });
-        sub.Children.Add(new TextBlock { Text = n.Subtitle, FontSize = 11, Foreground = Brushes.DimGray, TextTrimming = TextTrimming.CharacterEllipsis });
+        sub.Children.Add(new TextBlock { Text = n.Subtitle, FontSize = 11, Foreground = Brush("#C9CDD2"), TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(sub);
-        text.Children.Add(new TextBlock { Text = $"{n.Rate:0.##} /min", FontSize = 11, Foreground = Brushes.Gray });
+        text.Children.Add(new TextBlock { Text = $"{n.Rate:0.##} /min", FontSize = 11, Foreground = Brush("#9AA1A9") });
         var dock = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(icons, Dock.Left);
         dock.Children.Add(icons);
