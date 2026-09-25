@@ -1,0 +1,534 @@
+<Window x:Class="SatisfactoryPlanner.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:SatisfactoryPlanner"
+        x:Name="Root" Title="Satisfactory Planner" Height="860" Width="1450" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <DataTemplate x:Key="ItemTemplate">
+            <StackPanel Orientation="Horizontal">
+                <Image Source="{Binding Icon}" Width="22" Height="22" Margin="0,0,6,0"/>
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#FA9549" Padding="10,6">
+            <DockPanel>
+                <ComboBox DockPanel.Dock="Right" x:Name="LanguageCombo" Width="100" Margin="6,0,0,0" DisplayMemberPath="Item2" SelectedValuePath="Item1"
+                          SelectionChanged="Language_Changed" VerticalContentAlignment="Center"/>
+                <Button DockPanel.Dock="Right" Content="{Binding [btn.update], Source={x:Static local:Loc.Instance}}" Padding="10,3" Click="UpdateFromWiki_Click"/>
+                <ToggleButton DockPanel.Dock="Right" x:Name="UseSaveToggle" Content="{Binding [btn.useSave], Source={x:Static local:Loc.Instance}}" Padding="10,3" Margin="0,0,6,0"
+                              Click="UseSave_Click" Visibility="Collapsed" ToolTip="{Binding [tip.useSave], Source={x:Static local:Loc.Instance}}"/>
+                <Button DockPanel.Dock="Right" x:Name="ForgetSaveButton" Content="{Binding [btn.forgetSave], Source={x:Static local:Loc.Instance}}" Padding="10,3" Margin="0,0,6,0" Click="ForgetSave_Click" Visibility="Collapsed"/>
+                <Button DockPanel.Dock="Right" Content="{Binding [btn.loadSave], Source={x:Static local:Loc.Instance}}" Padding="10,3" Margin="0,0,6,0" Click="LoadSave_Click"/>
+                <TextBlock DockPanel.Dock="Right" x:Name="SaveText" Foreground="White" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                <TextBlock Text="Satisfactory Planner" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Foreground="White" Margin="20,0" VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Plan tabs: each holds its own targets / recipe swaps / modes -->
+        <Border DockPanel.Dock="Top" Background="#F1E7DC" BorderBrush="#D9CBBB" BorderThickness="0,0,0,1" Padding="8,5,8,0">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel Orientation="Horizontal">
+                    <ItemsControl x:Name="PlanTabsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="TabBorder" Margin="0,0,4,0" Padding="10,4,4,5" CornerRadius="6,6,0,0" BorderThickness="1,1,1,0"
+                                        BorderBrush="Transparent" Background="Transparent" Cursor="Hand" MinWidth="120"
+                                        MouseLeftButtonDown="PlanTab_MouseDown">
+                                    <Border.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{Binding [tabs.rename], Source={x:Static local:Loc.Instance}}" Click="PlanTabRename_Click"/>
+                                            <MenuItem Header="{Binding [tabs.duplicate], Source={x:Static local:Loc.Instance}}" Click="PlanTabDuplicate_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="{Binding [tabs.close], Source={x:Static local:Loc.Instance}}" Click="PlanTabClose_Click"/>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="✕" Width="18" Height="18" Padding="0" FontSize="10" Margin="6,0,0,0"
+                                                VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Click="PlanTabClose_Click"
+                                                ToolTip="{Binding [tabs.close], Source={x:Static local:Loc.Instance}}"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Summary}" FontSize="10" Foreground="Gray"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter TargetName="TabBorder" Property="Background" Value="White"/>
+                                        <Setter TargetName="TabBorder" Property="BorderBrush" Value="#FA9549"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="+" Width="30" Height="30" FontSize="16" Margin="2,0,0,4" VerticalAlignment="Center"
+                            Click="PlanTabNew_Click" ToolTip="{Binding [tabs.new], Source={x:Static local:Loc.Instance}}"/>
+                    <Button Content="⧉" Width="30" Height="30" FontSize="14" Margin="4,0,0,4" VerticalAlignment="Center"
+                            Click="PlanTabDuplicate_Click" ToolTip="{Binding [tabs.duplicateActive], Source={x:Static local:Loc.Instance}}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Settings -->
+        <ScrollViewer DockPanel.Dock="Left" Width="390" VerticalScrollBarVisibility="Auto" Background="#F5F5F5">
+            <StackPanel Margin="10">
+                <GroupBox Header="{Binding [grp.targets], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <ItemsControl x:Name="TargetsList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,2">
+                                        <Button DockPanel.Dock="Right" Content="✕" Width="24" Margin="4,0,0,0" Click="RemoveTarget_Click"/>
+                                        <TextBox DockPanel.Dock="Right" Width="60" Text="{Binding Rate, UpdateSourceTrigger=LostFocus}"
+                                                 VerticalContentAlignment="Center" LostFocus="Input_Changed" KeyDown="Rate_KeyDown"/>
+                                        <ComboBox ItemsSource="{Binding ProducibleItems, ElementName=Root}" ItemTemplate="{StaticResource ItemTemplate}"
+                                                  SelectedValuePath="ClassName" SelectedValue="{Binding Item}"
+                                                  IsTextSearchEnabled="True" TextSearch.TextPath="Name"
+                                                  SelectionChanged="Input_Changed" MaxDropDownHeight="500"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="{Binding [btn.addProduct], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="AddTarget_Click"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="{Binding [grp.recipeSel], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <RadioButton x:Name="PlanManual" Content="{Binding [opt.myPicks], Source={x:Static local:Loc.Instance}}" Click="Input_Changed" Margin="0,2"/>
+                        <RadioButton x:Name="PlanOptimal" Click="Input_Changed" Margin="0,2">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding [opt.minimal], Source={x:Static local:Loc.Instance}}"/>
+                        </RadioButton>
+                        <Button Content="{Binding [btn.clearPins], Source={x:Static local:Loc.Instance}}" Margin="0,4,0,0" Click="ClearPins_Click"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="{Binding [grp.tech], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" x:Name="TierLabel" Width="60" FontWeight="Bold"/>
+                            <Slider x:Name="TierSlider" Minimum="0" Maximum="9" TickFrequency="1" IsSnapToTickEnabled="True"
+                                    TickPlacement="BottomRight" ValueChanged="Input_Changed"/>
+                        </DockPanel>
+                        <CheckBox x:Name="AltCheck" Content="{Binding [chk.alts], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="Input_Changed"/>
+                        <CheckBox x:Name="MamCheck" Content="{Binding [chk.mam], Source={x:Static local:Loc.Instance}}" Margin="0,4,0,0" Click="Input_Changed"/>
+                        <CheckBox x:Name="PolymerCheck" Content="{Binding [chk.polymers], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.polymers], Source={x:Static local:Loc.Instance}}" Margin="0,4,0,0" Click="Input_Changed"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="{Binding [grp.nodes], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,4"
+                                   Text="{Binding [nodes.help], Source={x:Static local:Loc.Instance}}"/>
+                        <DockPanel Margin="0,0,0,2">
+                            <TextBlock DockPanel.Dock="Right" Width="44" Text="{Binding [col.limit], Source={x:Static local:Loc.Instance}}" FontSize="11" TextAlignment="Center"/>
+                            <TextBlock DockPanel.Dock="Right" Width="34" Text="{Binding [col.pure], Source={x:Static local:Loc.Instance}}" FontSize="11" TextAlignment="Center"/>
+                            <TextBlock DockPanel.Dock="Right" Width="34" Text="{Binding [col.norm], Source={x:Static local:Loc.Instance}}" FontSize="11" TextAlignment="Center"/>
+                            <TextBlock DockPanel.Dock="Right" Width="34" Text="{Binding [col.imp], Source={x:Static local:Loc.Instance}}" FontSize="11" TextAlignment="Center"/>
+                            <TextBlock Text="{Binding [col.resource], Source={x:Static local:Loc.Instance}}" FontSize="11"/>
+                        </DockPanel>
+                        <ItemsControl x:Name="ResourceAccessList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,1">
+                                        <TextBox DockPanel.Dock="Right" Width="42" Margin="2,0,0,0" Text="{Binding Limit, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 LostFocus="Input_Changed" KeyDown="Rate_KeyDown" IsEnabled="{Binding Enabled}"/>
+                                        <TextBox DockPanel.Dock="Right" Width="32" Margin="2,0,0,0" Text="{Binding Pure, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 LostFocus="Input_Changed" KeyDown="Rate_KeyDown" IsEnabled="{Binding PurityEnabled}" Visibility="{Binding PurityVisibility}"/>
+                                        <TextBox DockPanel.Dock="Right" Width="32" Margin="2,0,0,0" Text="{Binding Normal, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 LostFocus="Input_Changed" KeyDown="Rate_KeyDown" IsEnabled="{Binding PurityEnabled}" Visibility="{Binding PurityVisibility}"/>
+                                        <TextBox DockPanel.Dock="Right" Width="32" Margin="2,0,0,0" Text="{Binding Impure, UpdateSourceTrigger=LostFocus, TargetNullValue=''}"
+                                                 LostFocus="Input_Changed" KeyDown="Rate_KeyDown" IsEnabled="{Binding PurityEnabled}" Visibility="{Binding PurityVisibility}"/>
+                                        <CheckBox IsChecked="{Binding Enabled}" Click="Input_Changed" VerticalContentAlignment="Center"
+                                                  ToolTip="{Binding [tip.untick], Source={x:Static local:Loc.Instance}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Image Source="{Binding Icon}" Width="18" Height="18" Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="{Binding [grp.extraction], Source={x:Static local:Loc.Instance}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                        <TextBlock Text="{Binding [lbl.miner], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="MinerCombo" Grid.Column="1" ItemTemplate="{StaticResource ItemTemplate}"
+                                  SelectedValuePath="ClassName" SelectionChanged="Input_Changed" Margin="0,2"/>
+                        <TextBlock Grid.Row="1" Text="{Binding [lbl.clock], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center"/>
+                        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,4">
+                            <TextBlock DockPanel.Dock="Right" Width="45" Text="{Binding Value, ElementName=ClockSlider, StringFormat={}{0:0}%}"/>
+                            <Slider x:Name="ClockSlider" Minimum="1" Maximum="250" SmallChange="1" LargeChange="25"
+                                    IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="Input_Changed"/>
+                        </DockPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="{Binding [grp.rounding], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <RadioButton x:Name="ModeExact" Content="{Binding [mode.exact], Source={x:Static local:Loc.Instance}}" Click="Input_Changed" Margin="0,2"/>
+                        <RadioButton x:Name="ModeSteady" Click="Input_Changed" Margin="0,2">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding [mode.steady], Source={x:Static local:Loc.Instance}}"/>
+                        </RadioButton>
+                        <RadioButton x:Name="ModeNoClog" Click="Input_Changed" Margin="0,2">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding [mode.noclog], Source={x:Static local:Loc.Instance}}"/>
+                        </RadioButton>
+                        <RadioButton x:Name="ModeDrained" Click="Input_Changed" Margin="0,2">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding [mode.drained], Source={x:Static local:Loc.Instance}}"/>
+                        </RadioButton>
+                    </StackPanel>
+                </GroupBox>
+                <GroupBox Header="{Binding [grp.belts], Source={x:Static local:Loc.Instance}}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Text="{Binding [lbl.belt], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="BeltCombo" Grid.Column="1" Margin="0,2" DisplayMemberPath="Item2" SelectedValuePath="Item1" SelectionChanged="Input_Changed"/>
+                            <TextBlock Grid.Row="1" Text="{Binding [lbl.pipe], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="PipeCombo" Grid.Row="1" Grid.Column="1" Margin="0,2" DisplayMemberPath="Item2" SelectedValuePath="Item1" SelectionChanged="Input_Changed"/>
+                        </Grid>
+                        <CheckBox x:Name="TwoSplittersCheck" Content="{Binding [chk.twoSplitters], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,2" Click="Input_Changed"
+                                  IsEnabled="{Binding IsChecked, ElementName=ModeDrained}"/>
+                        <CheckBox x:Name="BackUpCheck" Content="{Binding [chk.backUp], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.backUp], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,2" Click="Input_Changed"
+                                  IsEnabled="{Binding IsChecked, ElementName=ModeDrained}"/>
+                        <CheckBox x:Name="EndSplitterCheck" Content="{Binding [chk.endSplitter], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,2" Click="Input_Changed"
+                                  ToolTip="{Binding [tip.endSplitter], Source={x:Static local:Loc.Instance}}"/>
+                    </StackPanel>
+                </GroupBox>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Results -->
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="3*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="2*"/>
+            </Grid.RowDefinitions>
+            <StackPanel>
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Right" x:Name="CountExtractorsCheck" Content="{Binding [chk.countExtractors], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Click="Input_Changed"/>
+                    <TextBlock x:Name="SummaryText" FontSize="15" FontWeight="SemiBold"/>
+                </DockPanel>
+                <TextBlock x:Name="WarningText" Foreground="#B00020" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding [hint.production], Source={x:Static local:Loc.Instance}}" Foreground="Gray" Margin="0,4"/>
+            </StackPanel>
+
+            <TabControl Grid.Row="1" x:Name="MainTabs" SelectionChanged="MainTabs_SelectionChanged">
+                <TabItem Header="{Binding [tab.table], Source={x:Static local:Loc.Instance}}">
+            <DataGrid x:Name="MachinesGrid">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="{Binding [col.item], Source={x:Static local:Loc.Instance}}" Width="190" IsReadOnly="True" SortMemberPath="ItemName">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding Icon}" Width="28" Height="28" Margin="2,0,6,0"/>
+                                    <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="{Binding [col.recipe], Source={x:Static local:Loc.Instance}}" Width="260">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Recipe, Mode=OneWay}" SelectionChanged="Recipe_SelectionChanged"
+                                          DisplayMemberPath="Display" VerticalAlignment="Center" MaxDropDownHeight="400">
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="ToolTip" Value="{Binding UnlockedBy}"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                </ComboBox>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="{Binding [col.building], Source={x:Static local:Loc.Instance}}" Width="170" IsReadOnly="True" SortMemberPath="BuildingName">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding BuildingIcon}" Width="28" Height="28" Margin="2,0,6,0"/>
+                                    <TextBlock Text="{Binding BuildingName}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="{Binding [col.machines], Source={x:Static local:Loc.Instance}}" Binding="{Binding CountText}" IsReadOnly="True" FontWeight="Bold" SortMemberPath="Exact"/>
+                    <DataGridTextColumn Header="{Binding [col.clock], Source={x:Static local:Loc.Instance}}" Binding="{Binding ClockText}" IsReadOnly="True" SortMemberPath="Clock"/>
+                    <DataGridTextColumn Header="{Binding [col.output], Source={x:Static local:Loc.Instance}}" Binding="{Binding OutputRate, StringFormat=0.###}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="{Binding [col.inputs], Source={x:Static local:Loc.Instance}}" Binding="{Binding Inputs}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="{Binding [col.goesTo], Source={x:Static local:Loc.Instance}}" Binding="{Binding GoesTo}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="{Binding [col.power], Source={x:Static local:Loc.Instance}}" Binding="{Binding Power, StringFormat=0.#}" IsReadOnly="True"/>
+                </DataGrid.Columns>
+            </DataGrid>
+                </TabItem>
+                <TabItem Header="{Binding [tab.tree], Source={x:Static local:Loc.Instance}}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4">
+                            <TextBlock Text="{Binding [lbl.zoom], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Slider x:Name="ZoomSlider" Width="160" Minimum="0.2" Maximum="2" Value="0.8" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat={}{0:P0}}" Width="45" Margin="6,0" VerticalAlignment="Center"/>
+                            <Button Content="{Binding [btn.fit], Source={x:Static local:Loc.Instance}}" Padding="10,2" Click="FitTree_Click"/>
+                            <TextBlock Text="{Binding [hint.tree], Source={x:Static local:Loc.Instance}}" Foreground="Gray" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ScrollViewer x:Name="TreeScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                      Background="#FAFAFA" PreviewMouseWheel="TreeScroll_Wheel">
+                            <local:TreeDiagram x:Name="Tree">
+                                <local:TreeDiagram.LayoutTransform>
+                                    <ScaleTransform ScaleX="{Binding Value, ElementName=ZoomSlider}" ScaleY="{Binding Value, ElementName=ZoomSlider}"/>
+                                </local:TreeDiagram.LayoutTransform>
+                            </local:TreeDiagram>
+                        </ScrollViewer>
+                    </DockPanel>
+                </TabItem>
+                <TabItem x:Name="LayoutTab" Header="{Binding [tab.layout], Source={x:Static local:Loc.Instance}}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4">
+                            <TextBlock Text="{Binding [lbl.zoom], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Slider x:Name="LayoutZoom" Width="160" Minimum="0.05" Maximum="2" Value="0.6" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Value, ElementName=LayoutZoom, StringFormat={}{0:P0}}" Width="45" Margin="6,0" VerticalAlignment="Center"/>
+                            <Button Content="{Binding [btn.fit], Source={x:Static local:Loc.Instance}}" Padding="10,2" Click="FitLayout_Click"/>
+                            <Button Content="{Binding [btn.exportPng], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportLayoutPng_Click"/>
+                            <Button Content="{Binding [btn.exportCsv], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportLayoutCsv_Click"/>
+                            <Button x:Name="ExportBpButton" Content="{Binding [btn.exportBp], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.exportBp], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportBlueprints_Click"/>
+                            <TextBlock Text="{Binding [lbl.floors], Source={x:Static local:Loc.Instance}}" Margin="12,0,4,0" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="FloorsCombo" Width="48" SelectionChanged="FloorsCombo_Changed">
+                                <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/>
+                            </ComboBox>
+                            <TextBlock Text="{Binding [lbl.blueprint], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="BlueprintCombo" Width="110" SelectionChanged="BlueprintCombo_Changed">
+                                <ComboBoxItem Content="{Binding [bp.off], Source={x:Static local:Loc.Instance}}"/>
+                                <ComboBoxItem Content="{Binding [bp.mk2], Source={x:Static local:Loc.Instance}}"/>
+                                <ComboBoxItem Content="{Binding [bp.mk3], Source={x:Static local:Loc.Instance}}"/>
+                            </ComboBox>
+                            <CheckBox x:Name="HandCheck" Content="{Binding [chk.byHand], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.byHand], Source={x:Static local:Loc.Instance}}" Margin="8,0,0,0" VerticalAlignment="Center" Click="HandCheck_Click"/>
+                            <CheckBox x:Name="TankCheck" Content="{Binding [chk.bigTank], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.bigTank], Source={x:Static local:Loc.Instance}}" Margin="8,0,0,0" VerticalAlignment="Center" Click="TankCheck_Click"/>
+                            <TextBlock Text="{Binding [lbl.cached], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="CacheCombo" Width="250" SelectionChanged="CacheCombo_Changed" ToolTip="{Binding [tip.cached], Source={x:Static local:Loc.Instance}}"/>
+                            <Button Content="{Binding [btn.relayout], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.relayout], Source={x:Static local:Loc.Instance}}" Padding="8,2" Margin="4,0,0,0" Click="Relayout_Click"/>
+                            <TextBlock Text="{Binding [lbl.showFloor], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="FloorViewCombo" Width="70" SelectionChanged="FloorView_Changed"/>
+                            <TextBlock x:Name="LayoutInfo" Foreground="Gray" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock DockPanel.Dock="Bottom" Text="{Binding [layout.legend], Source={x:Static local:Loc.Instance}}" Foreground="Gray" TextWrapping="Wrap" Margin="4"/>
+                        <Grid>
+                        <ScrollViewer x:Name="LayoutScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                      Background="#1E2A33" PreviewMouseWheel="LayoutScroll_Wheel">
+                            <local:LayoutView x:Name="LayoutCanvas">
+                                <local:LayoutView.LayoutTransform>
+                                    <ScaleTransform ScaleX="{Binding Value, ElementName=LayoutZoom}" ScaleY="{Binding Value, ElementName=LayoutZoom}"/>
+                                </local:LayoutView.LayoutTransform>
+                            </local:LayoutView>
+                        </ScrollViewer>
+                        <!-- shown while the layout is calculated in the background -->
+                        <Border x:Name="LayoutBusy" Visibility="Collapsed" Background="#99101820">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Ellipse Width="48" Height="48" StrokeThickness="5" Stroke="#4FC3F7" StrokeDashArray="7 5" RenderTransformOrigin="0.5,0.5">
+                                    <Ellipse.RenderTransform><RotateTransform x:Name="LayoutSpin"/></Ellipse.RenderTransform>
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" From="0" To="360" Duration="0:0:1.2"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <TextBlock Text="{Binding [layout.busy], Source={x:Static local:Loc.Instance}}" Foreground="White" FontSize="14" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="LayoutStep" Foreground="#B0C4D0" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="LayoutElapsed" Foreground="#80949F" FontSize="11" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <!-- blueprint export: how many are written so far -->
+                        <Border x:Name="ExportBusy" Visibility="Collapsed" Background="#99101820">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="340">
+                                <TextBlock x:Name="ExportTitle" Foreground="White" FontSize="14" HorizontalAlignment="Center"/>
+                                <ProgressBar x:Name="ExportBar" Height="14" Margin="0,10,0,0" IsIndeterminate="True"/>
+                                <TextBlock x:Name="ExportCount" Foreground="#B0C4D0" FontSize="12" Margin="0,6,0,0" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        </Grid>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
+
+            <TextBlock Grid.Row="2" Text="{Binding [hdr.raw], Source={x:Static local:Loc.Instance}}" FontWeight="SemiBold" Margin="0,10,0,4"/>
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="1*"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
+                <DataGrid x:Name="ResourcesGrid" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{Binding [col.resource], Source={x:Static local:Loc.Instance}}" Width="160" SortMemberPath="ItemName">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding Icon}" Width="28" Height="28" Margin="2,0,6,0"/>
+                                        <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{Binding [col.rate], Source={x:Static local:Loc.Instance}}" Binding="{Binding Rate, StringFormat=0.###}"/>
+                        <DataGridTemplateColumn Header="{Binding [col.extractor], Source={x:Static local:Loc.Instance}}" Width="170">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding SourceIcon}" Width="28" Height="28" Margin="2,0,6,0"/>
+                                        <TextBlock Text="{Binding Source}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{Binding [col.count], Source={x:Static local:Loc.Instance}}" Binding="{Binding CountText}" FontWeight="Bold"/>
+                        <DataGridTextColumn Header="{Binding [col.clock], Source={x:Static local:Loc.Instance}}" Binding="{Binding ClockText}"/>
+                        <DataGridTextColumn Header="{Binding [col.note], Source={x:Static local:Loc.Instance}}" Binding="{Binding Note}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TabControl Grid.Column="1" Margin="10,0,0,0">
+                    <TabItem Header="{Binding [tab.outputs], Source={x:Static local:Loc.Instance}}">
+                <DataGrid x:Name="OutputsGrid" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{Binding [col.outputItem], Source={x:Static local:Loc.Instance}}" Width="170">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding Icon}" Width="28" Height="28" Margin="2,0,6,0"/>
+                                        <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{Binding [col.perMin], Source={x:Static local:Loc.Instance}}" Binding="{Binding Rate, StringFormat=0.###}"/>
+                        <DataGridTextColumn Header="" Binding="{Binding Kind}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                    </TabItem>
+                    <TabItem x:Name="UnlockTab" Header="{Binding [tab.unlock], Source={x:Static local:Loc.Instance}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" x:Name="UnlockSummary" TextWrapping="Wrap" Margin="4" FontWeight="SemiBold"/>
+                            <DataGrid x:Name="UnlockGrid" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="{Binding [col.recipe], Source={x:Static local:Loc.Instance}}" Width="190">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Image Source="{Binding Icon}" Width="24" Height="24" Margin="2,0,6,0"/>
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="{Binding [col.benefit], Source={x:Static local:Loc.Instance}}" Binding="{Binding Benefit}" Width="170">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="{Binding [col.unlockedBy], Source={x:Static local:Loc.Instance}}" Binding="{Binding UnlockedBy}" Width="*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem x:Name="SplitTab" Header="{Binding [tab.splitters], Source={x:Static local:Loc.Instance}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" x:Name="SplitHint" TextWrapping="Wrap" Margin="4" Foreground="Gray"/>
+                            <DataGrid x:Name="SplitGrid" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="{Binding [col.item], Source={x:Static local:Loc.Instance}}" Width="150" SortMemberPath="ItemName">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Image Source="{Binding Icon}" Width="24" Height="24" Margin="2,0,6,0"/>
+                                                    <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="{Binding [col.line], Source={x:Static local:Loc.Instance}}" Binding="{Binding LineText}"/>
+                                    <DataGridTextColumn Header="{Binding [col.belt], Source={x:Static local:Loc.Instance}}" Binding="{Binding Belt}"/>
+                                    <DataGridTextColumn Header="{Binding [col.supply], Source={x:Static local:Loc.Instance}}" Binding="{Binding Supply, StringFormat=0.##}"/>
+                                    <DataGridTextColumn Header="{Binding [col.extra], Source={x:Static local:Loc.Instance}}" Binding="{Binding Extra}"/>
+                                    <DataGridTextColumn Header="{Binding [col.layout], Source={x:Static local:Loc.Instance}}" Binding="{Binding Layout}" Width="2*">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="{Binding [col.shares], Source={x:Static local:Loc.Instance}}" Binding="{Binding Shares}" Width="2*">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem x:Name="GuardTab" Header="{Binding [tab.guards], Source={x:Static local:Loc.Instance}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding [guard.hint], Source={x:Static local:Loc.Instance}}" TextWrapping="Wrap" Margin="4" Foreground="Gray"/>
+                            <DataGrid x:Name="GuardGrid" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="{Binding [guard.col.machine], Source={x:Static local:Loc.Instance}}" Width="190">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Image Source="{Binding MachineIcon}" Width="22" Height="22" Margin="2,0,6,0"/>
+                                                    <TextBlock Text="{Binding MachineText}" VerticalAlignment="Center" TextWrapping="Wrap" Width="150"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="{Binding [guard.col.output], Source={x:Static local:Loc.Instance}}" Width="130">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Image Source="{Binding ItemIcon}" Width="22" Height="22" Margin="2,0,6,0"/>
+                                                    <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="{Binding [guard.col.level], Source={x:Static local:Loc.Instance}}" Binding="{Binding LevelText}"/>
+                                    <DataGridTextColumn Header="{Binding [guard.col.device], Source={x:Static local:Loc.Instance}}" Binding="{Binding Device}"/>
+                                    <DataGridTextColumn Header="{Binding [guard.col.where], Source={x:Static local:Loc.Instance}}" Binding="{Binding Placement}" Width="*">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem x:Name="TotalsTab" Header="{Binding [tab.totals], Source={x:Static local:Loc.Instance}}">
+                        <DataGrid x:Name="TotalsGrid" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="{Binding [col.building], Source={x:Static local:Loc.Instance}}" Width="*" SortMemberPath="Name">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Image Source="{Binding Icon}" Width="26" Height="26" Margin="2,0,6,0"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="{Binding [col.count], Source={x:Static local:Loc.Instance}}" Binding="{Binding Count}" FontWeight="Bold"/>
+                                <DataGridTextColumn Header="{Binding [col.type], Source={x:Static local:Loc.Instance}}" Binding="{Binding Kind}"/>
+                                <DataGridTextColumn Header="{Binding [col.power], Source={x:Static local:Loc.Instance}}" Binding="{Binding Power, StringFormat=0.#}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

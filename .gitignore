@@ -1,0 +1,17 @@
+# build output
+bin/
+obj/
+publish/
+*.user
+.vs/
+.vscode/
+
+# game content: Coffee Stain's data, icons and translated names (the app downloads recipe data and icons from
+# satisfactory.wiki.gg on first start and reads names from a local Satisfactory install)
+Data/
+
+# the blueprint writer's library: restored with `npm ci` in bp/ (the build does it)
+bp/node_modules/
+
+# local tooling
+.claude/settings.local.json

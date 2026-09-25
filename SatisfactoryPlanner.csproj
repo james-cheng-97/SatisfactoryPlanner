@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyTitle>Satisfactory Planner</AssemblyTitle>
+    <Product>Satisfactory Planner</Product>
+    <Version>1.0.0</Version>
+    <ApplicationIcon Condition="Exists('app.ico')">app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- dotnet publish -c Release  →  one self-contained exe (no .NET install needed); data, icons and names are inside it -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="Data\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Data\images\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- the blueprint writer (Node.js + satisfactory-file-parser): Export blueprints runs it -->
+    <None Include="bp\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- a fresh clone has no bp/node_modules (not in Git): restore the blueprint writer's library with npm. Without
+       npm the app still builds; only "Export blueprints" can't run until `npm ci` is done in bp/ -->
+  <Target Name="RestoreBlueprintWriter" BeforeTargets="BeforeBuild" Condition="!Exists('bp/node_modules/@etothepii/satisfactory-file-parser')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="bp" ContinueOnError="true" />
+    <Warning Condition="!Exists('bp/node_modules/@etothepii/satisfactory-file-parser')" Text="bp/node_modules missing: run 'npm ci' in bp/ (needs Node.js) so Export blueprints works." />
+  </Target>
+</Project>

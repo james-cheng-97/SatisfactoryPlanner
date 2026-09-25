@@ -1,0 +1,12 @@
+{
+  "name": "satisfactory-planner-blueprint-writer",
+  "version": "1.0.0",
+  "description": "Writes Satisfactory blueprints (.sbp / .sbpcfg) from the planner's layout specs. Run by the app's Export blueprints button.",
+  "main": "write.js",
+  "private": true,
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@etothepii/satisfactory-file-parser": "^4.1.2"
+  }
+}
