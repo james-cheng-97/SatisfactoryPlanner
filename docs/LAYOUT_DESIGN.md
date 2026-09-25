@@ -156,6 +156,15 @@ for Node.js (warns + offers nodejs.org), asks for a folder (default SaveGameslu
 a game-made .sbp there (or a folder above), writes "<tab> rRcC.sbp" per tile and "<tab> wiring.txt" (joints + warnings).
 Keep `bp/` in the repo in step with the scratchpad writer. Build flavours (build.ps1): standard (no Data, no node_modules: wiki data on first start, npm ci into %LOCALAPPDATA%/SatisfactoryPlanner/bp on first export) and full (-p:Flavor=Full: Data, node_modules and a portable node.exe from NodeDir, bp/node/node.exe preferred at run time).
 
+### 2.10c Plastic + rubber recycling loop (app, `PolymerLoop.cs`)
+A plan for exactly plastic + rubber, with the loop recipes available (save unlocks, or tier / alternates without a save),
+asks once per tab (`Settings.PolymerLoopAnswer`) whether to pin the loop: Heavy Oil Residue (alt) → Diluted Packaged
+Fuel (alt) → Unpackage Fuel → Recycled Plastic ⇄ Recycled Rubber (packaged water / canisters loop too). About 80 per 30
+crude vs 40. It needs a starting stock (plastic, rubber in the recycling refineries; empty canisters in the packagers);
+the machines' input slots are the buffer, no storage container. Plastic and rubber belts always get a smart splitter with
+the output on Overflow (`Splitters.Plan(loopFirst)`, and the export treats their output boxes like overflow boxes), so
+the other side's refineries are always fed first and the loop can't run dry. Test: scratchpad `QUICK=10 [MODE=..] [LAYOUT=1]`.
+
 ### 2.11 In-game test saves (scratchpad `bp/`)
 `inject.js` puts a factory's tile blueprints (write.js objects, `DUMP_OBJECTS=1`) into a copy of a save, 50 m east / 100 m
 up from the player (`STRIP=1` removes an earlier injection: names 2100000000–2100099999). `testrun.js` then joins every

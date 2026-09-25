@@ -36,6 +36,11 @@ public partial class MainWindow : Window
         // no game data yet (a build from source ships none: it's the wiki's / Coffee Stain's): fetch it from the wiki
         Loaded += async (_, _) => { if (GameData.Recipes.Count == 0) await UpdateFromWikiAsync(); else await FetchMissingIcons(); };
         Closing += (_, _) => SaveSettings();
+        // frosted glass: the layout underneath blurs while a busy overlay is up, so its labels don't fight the status text
+        void Frost(object? _, DependencyPropertyChangedEventArgs __) =>
+            LayoutScroll.Effect = LayoutBusy.IsVisible || ExportBusy.IsVisible ? new System.Windows.Media.Effects.BlurEffect { Radius = 10, KernelType = System.Windows.Media.Effects.KernelType.Gaussian } : null;
+        LayoutBusy.IsVisibleChanged += Frost;
+        ExportBusy.IsVisibleChanged += Frost;
         // "what to produce": type to find an item (any part of its name, in this language or English) and add it
         SetupItemSearch(ProductSearch, () => ProducibleItems, it =>
         {
@@ -155,14 +160,31 @@ public partial class MainWindow : Window
         foreach (var r in _resources) r.Tier = _settings.MaxTier;
     }
 
+    /// <summary>
+    /// A plan for exactly plastic + rubber whose save (or, without a save, the tier / alternates settings) allows the
+    /// recycling loop: ask once whether to use it (more per crude oil, needs a starting stock) or the plain recipes.
+    /// </summary>
+    bool _loopAskPending;
+    void AskPolymerLoop()
+    {
+        if (!PolymerLoop.Applies(_settings)) { _settings.PolymerLoopAnswer = null; return; } // (asked again next time)
+        if (_settings.PolymerLoopAnswer != null || PolymerLoop.IsOn(_settings) || !PolymerLoop.Available(_settings)) return;
+        if (!IsLoaded) { if (!_loopAskPending) { _loopAskPending = true; Loaded += (_, _) => Recalculate(); } return; } // (asked once the window is up)
+        bool yes = MessageBox.Show(this, Loc.T("loop.ask"), Loc.T("loop.title"), MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        _settings.PolymerLoopAnswer = yes;
+        if (yes) PolymerLoop.Apply(_settings);
+    }
+
     void Recalculate()
     {
         if (_loading) return;
         RefreshBeltChoices(); // tier may have changed
         ReadUi();
+        AskPolymerLoop();
         Plan plan;
         try { plan = Plan.Build(_settings); }
         catch (Exception ex) { WarningText.Text = Loc.T("error", ex.Message); return; }
+        if (PolymerLoop.Applies(_settings) && PolymerLoop.IsOn(_settings)) plan.Warnings.Insert(0, Loc.T("loop.seed"));
 
         MachinesGrid.ItemsSource = plan.Machines;
         ImportedList.ItemsSource = _settings.ImportedItems.Select(GameData.Item).ToList();

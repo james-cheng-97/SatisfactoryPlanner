@@ -73,6 +73,7 @@ public static class BlueprintExport
 
         // ---- buildings: machines and station boxes, turned so their input side faces south (game +Y) ----
         var surplusIds = new HashSet<string>(); // overflow (surplus) boxes
+        bool loop = PolymerLoop.Applies(s) && PolymerLoop.IsOn(s);
         var portsAt = new List<(string id, string port, double X, double Y, double Z, bool input, bool pipe)>();
         int n = 0;
         foreach (var b in L.Buildings.Where(b => b.Kind != "hole" && b.Floor < floors))
@@ -104,6 +105,8 @@ public static class BlueprintExport
             }
             ents.Add(new Entity(id, cls, X, Y, zb, yaw, b.Recipe, fill: b.Kind == "input" ? b.Item?.Split('#')[0] : null));
             if (b.Kind == "surplus") surplusIds.Add(id);
+            // plastic / rubber recycling loop: the other side's refineries first, only the surplus leaves (never runs dry)
+            else if (b.Kind == "output" && loop && b.Item?.Split('#')[0] is PolymerLoop.Plastic or PolymerLoop.Rubber) surplusIds.Add(id);
             double c = Math.Cos(yaw * Math.PI / 180), sn = Math.Sin(yaw * Math.PI / 180);
             foreach (var p in ports)
                 portsAt.Add((id, p.name, X + p.x * c - p.y * sn, Y + p.x * sn + p.y * c, zb + p.z, p.input, p.pipe));

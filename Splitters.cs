@@ -89,9 +89,9 @@ public static class Splitters
     /// fewest parallel lines whose own layouts each fit on one belt. Lines are independent: spill on one line can't
     /// reach another, so each line is planned — and pays for its greedy consumers — on its own.
     /// </summary>
-    public static List<SplitPlan> PlanLines(string item, List<SplitConsumer> cs, bool twoInRow, double beltCap, string beltLabel)
+    public static List<SplitPlan> PlanLines(string item, List<SplitConsumer> cs, bool twoInRow, double beltCap, string beltLabel, bool loopFirst = false)
     {
-        var single = Plan(item, cs, twoInRow);
+        var single = Plan(item, cs, twoInRow, loopFirst);
         single.Belt = beltLabel;
         single.MachinesPerConsumer = cs.Where(c => !c.Uncapped).GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.Sum(c => c.Machines));
         single.DrainsOnLine = cs.Count(c => c.Uncapped);
@@ -147,7 +147,7 @@ public static class Splitters
                 {
                     Need = g.Sum(u => u.Need), Cap = g.First().Uncapped ? double.PositiveInfinity : g.Sum(u => u.Cap), Machines = g.Sum(u => u.Machines)
                 }).ToList();
-                var p = Plan(item, merged, twoInRow);
+                var p = Plan(item, merged, twoInRow, loopFirst);
                 p.MachinesPerConsumer = merged.Where(c => !c.Uncapped).ToDictionary(c => c.Key, c => c.Machines);
                 p.DrainsOnLine = merged.Count(c => c.Uncapped);
                 return p;
@@ -163,7 +163,9 @@ public static class Splitters
     }
 
     /// <param name="twoInRow">Allow a second splitter behind the first (default: one splitter between output and input).</param>
-    public static SplitPlan Plan(string item, List<SplitConsumer> cs, bool twoInRow = false)
+    /// <param name="loopFirst">A recycling loop item: the machines must always come first (smart splitter, drained output on
+    /// Overflow) even where a plain splitter would do — a fixed share to the output could starve the loop.</param>
+    public static SplitPlan Plan(string item, List<SplitConsumer> cs, bool twoInRow = false, bool loopFirst = false)
     {
         double need = cs.Sum(c => c.Need);
         if (cs.Count <= 1)
@@ -209,7 +211,8 @@ public static class Splitters
 
         // prefer: one plain splitter < one smart splitter < manifold, unless another option needs less supply
         double pick = Math.Min(bestS, Math.Min(smart, manifold));
-        if (bestW != null && bestS <= pick + 1e-6)
+        if (loopFirst && smart < double.MaxValue) pick = bestS = smart;
+        if (bestW != null && bestS <= pick + 1e-6 && !(loopFirst && smart < double.MaxValue))
             return new SplitPlan
             {
                 Item = item, Need = need, Supply = bestS, Layout = bestLayout, Shares = Describe(cs, bestW), Kind = SplitKind.Splitter,

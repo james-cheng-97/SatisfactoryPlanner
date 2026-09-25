@@ -296,6 +296,7 @@ public class Plan
         double Whole(RecipeDef r, double x) => Math.Max(Math.Ceiling(x - 1e-6), lineWhole.GetValueOrDefault(r));
         var clock = System.Diagnostics.Stopwatch.StartNew();
         bool converged = false, timedOut = false;
+        bool polymerLoop = PolymerLoop.Applies(s) && PolymerLoop.IsOn(s);
         for (int iter = 0; iter < 40; iter++)
         {
             // time budget: huge plans stop refining rather than freezing the window
@@ -338,9 +339,10 @@ public class Plan
                     && sol.Machines.Keys.Where(r => r.Out.Any(o => o.Item == item)).All(r => r.Out.Count == 1)) continue;
                 if (cs.Count <= 1 && cs.Sum(c => c.Need) <= belt.rate) continue; // one consumer on one belt: nothing to plan
                 // safety net: once the time budget is gone, skip line packing for the remaining items
+                bool loopFirst = polymerLoop && item is PolymerLoop.Plastic or PolymerLoop.Rubber;
                 var lines = clock.ElapsedMilliseconds > 3000
-                    ? [Splitters.Plan(item, cs, s.TwoSplittersInRow)]
-                    : Splitters.PlanLines(item, cs, s.TwoSplittersInRow, belt.rate, s.BeltLabel(item));
+                    ? [Splitters.Plan(item, cs, s.TwoSplittersInRow, loopFirst)]
+                    : Splitters.PlanLines(item, cs, s.TwoSplittersInRow, belt.rate, s.BeltLabel(item), loopFirst);
                 splits.AddRange(lines);
                 var supply = lines.Sum(p => p.Supply);
                 var need = cs.Sum(c => c.Need);

@@ -48,6 +48,8 @@ public class Settings
     public bool IndustrialFluidBox { get; set; }
     /// <summary>How long the place &amp; route planner may search (s). Short limits make big plans fall back to the row layout.</summary>
     public int LayoutSeconds { get; set; } = 120;
+    /// <summary>Plastic + rubber plan: the user's answer to "use the recycling loop?" (null = not asked yet).</summary>
+    public bool? PolymerLoopAnswer { get; set; }
     public int PipeTier { get; set; }
     /// <summary>Items this factory imports instead of making them (delivered like a raw resource from a site elsewhere):
     /// plastic and rubber by default — they're usually made at a stand-alone oil site, and making a little here drags
