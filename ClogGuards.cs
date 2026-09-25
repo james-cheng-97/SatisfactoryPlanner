@@ -27,6 +27,16 @@ public class ClogGuard
     /// <summary>How to process the surplus: "" = overflow into a box, "sink", or a recipe class.</summary>
     public List<ClogOption> Options { get; init; } = new();
     public ClogOption? Choice { get; set; }
+
+    // ---- the chain card ----
+    /// <summary>Steps below the chain's first surplus (0 = a surplus of the plan itself).</summary>
+    public int Depth { get; set; }
+    public System.Windows.Thickness Indent => new(Depth * 36, 0, 0, 10);
+    public bool IsStep => Depth > 0;
+    public string RateText => $"{Surplus:0.##} {(Fluid ? "m³/min" : "/min")}";
+    /// <summary>good: ends where nothing fills up · next: processed, carries on in the card below · warn: ends in a box</summary>
+    public string Status => Choice?.Key is { Length: > 0 } k ? (ClogGuards.Safe(k) ? "good" : "next") : Level == GuardLevel.Required ? "warn" : "info";
+    public string StatusText => Loc.T("clog.status." + Status);
 }
 
 /// <summary>One way to deal with a clogging surplus (Clog guards → how to process).</summary>
@@ -50,9 +60,10 @@ public static class ClogGuards
     /// generators (fuels), merging into that product's output through a smart splitter with a sink on Overflow (an overflow
     /// of one of the plan's products), or a direct recipe (the surplus + raw resources only) whose products are new
     /// overflows to deal with in turn.</summary>
-    public static List<ClogOption> OptionsFor(string item, Settings s)
+    /// <param name="required">A real surplus (it WILL back up). Otherwise machines use all of it: leaving it is fine.</param>
+    public static List<ClogOption> OptionsFor(string item, Settings s, bool required = true)
     {
-        var o = new List<ClogOption> { new("", Loc.T("clog.box")) };
+        var o = new List<ClogOption> { new("", Loc.T(required ? "clog.box" : "clog.keep")) };
         var baseItem = GameData.BaseItem(item);
         bool fluid = GameData.Item(item).IsFluid;
         if (!fluid) o.Add(new(Settings.SinkHandling, Loc.T("clog.sink")));
@@ -107,6 +118,12 @@ public static class ClogGuards
                 double totalProduced = plan.Machines.Sum(m => m.Recipe.Out.Where(a => a.Item == item).Sum(a => m.Recipe.PerMin(a.Value) * m.Exact));
                 double leftover = plan.Outputs.Where(o => o.Item == item && !o.IsTarget).Sum(o => o.Rate);
                 double surplus = totalProduced > 0 ? leftover * produced / totalProduced : 0;
+                // what an overflow chain already takes away counts as surplus too (it's only there because of it)
+                double processed = plan.Machines.Where(m => m.Recipe.OverflowOf == item)
+                    .Sum(m => m.Recipe.PerMin(m.Recipe.In.First(a => a.Item == item).Value) * m.Exact);
+                if (totalProduced > 0) surplus += processed * produced / totalProduced;
+                consumers = consumers.Where(m => m.Recipe.OverflowOf != item).ToList();
+                consumerNeed = consumers.Sum(m => m.Recipe.PerMin(m.Recipe.In.First(a => a.Item == item).Value) * m.Exact);
 
                 GuardLevel? level = surplus > 1e-3 ? GuardLevel.Required : consumers.Count > 0 ? GuardLevel.Recommended : null;
                 if (level == null) continue; // only feeds a final output that is taken away
@@ -122,9 +139,9 @@ public static class ClogGuards
                         : Loc.T("guard.smartHow", row.BuildingName, who, surplus / lines);
                 if (level == GuardLevel.Recommended) placement += " " + Loc.T("guard.recommendedWhy", who);
                 if (lines > 1) placement += " " + Loc.T("guard.perLine", lines);
-                var options = OptionsFor(item, s);
+                var options = OptionsFor(item, s, level == GuardLevel.Required);
                 var choice = options.FirstOrDefault(o => o.Key == s.ClogHandling.GetValueOrDefault(item, "")) ?? options[0];
-                placement += " " + How(choice);
+                if (level == GuardLevel.Required || choice.Key != "") placement += " " + How(choice); // (recommended + kept: nothing to add)
 
                 guards.Add(new ClogGuard
                 {

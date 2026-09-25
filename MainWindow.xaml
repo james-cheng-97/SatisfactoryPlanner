@@ -284,7 +284,7 @@
                             <TextBlock x:Name="KpiInputsSub" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                         </StackPanel>
                     </Border>
-                    <Border x:Name="KpiClogCard" Style="{StaticResource Card}" Margin="0,0,10,0">
+                    <Border x:Name="KpiClogCard" Style="{StaticResource Card}" Margin="0,0,10,0" Cursor="Hand" MouseLeftButtonUp="KpiClog_Click">
                         <StackPanel>
                             <TextBlock Text="{Binding [kpi.clog], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
                             <TextBlock x:Name="KpiClogValue" FontFamily="{StaticResource F.Display}" FontSize="26" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -519,6 +519,66 @@
                         </Grid>
                     </DockPanel>
                 </TabItem>
+                <TabItem x:Name="GuardTab" Header="{Binding [tab.guards], Source={x:Static local:Loc.Instance}}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="{Binding [guard.hint], Source={x:Static local:Loc.Instance}}" TextWrapping="Wrap" Margin="4" Foreground="{StaticResource B.Muted}"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="GuardGrid">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="card" Style="{StaticResource Card}" Margin="{Binding Indent}" Padding="14,12">
+                                            <DockPanel>
+                                                <!-- status on the right -->
+                                                <TextBlock x:Name="status" DockPanel.Dock="Right" Text="{Binding StatusText}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                           Margin="12,0,0,0" Foreground="{StaticResource B.Muted}"/>
+                                                <StackPanel>
+                                                    <WrapPanel>
+                                                        <!-- where the surplus comes from, and how much -->
+                                                        <StackPanel Width="230" Margin="0,0,12,6" VerticalAlignment="Center">
+                                                            <TextBlock Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
+                                                                <Run x:Name="stepMark" Text=""/><Run Text="{Binding MachineText, Mode=OneWay}"/>
+                                                            </TextBlock>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                                <Image Source="{Binding ItemIcon}" Width="24" Height="24" Margin="0,0,8,0"/>
+                                                                <TextBlock Text="{Binding ItemName}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                                                                <TextBlock Text="{Binding RateText}" FontFamily="{StaticResource F.Mono}" Foreground="{StaticResource B.TextSoft}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <Path Data="M0,6 H22 M16,0 L23,6 L16,12" Stroke="#6B737C" StrokeThickness="1.8" VerticalAlignment="Center" Margin="0,0,12,6"/>
+                                                        <!-- what happens to it -->
+                                                        <StackPanel Margin="0,0,0,6">
+                                                            <TextBlock Text="{Binding [guard.col.how], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" Margin="0,0,0,3"/>
+                                                            <ComboBox Width="330" ItemsSource="{Binding Options}" SelectedItem="{Binding Choice, Mode=OneWay}" DisplayMemberPath="Label"
+                                                                      SelectionChanged="ClogHow_Changed" ToolTip="{Binding [tip.clogHow], Source={x:Static local:Loc.Instance}}"/>
+                                                        </StackPanel>
+                                                    </WrapPanel>
+                                                    <TextBlock Text="{Binding Placement}" Style="{StaticResource Hint}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="good">
+                                                <Setter TargetName="status" Property="Foreground" Value="{StaticResource B.Good}"/>
+                                                <Setter TargetName="card" Property="BorderBrush" Value="#2D4A3B"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="warn">
+                                                <Setter TargetName="status" Property="Foreground" Value="{StaticResource B.Warn}"/>
+                                                <Setter TargetName="card" Property="BorderBrush" Value="#5A4520"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="next">
+                                                <Setter TargetName="status" Property="Foreground" Value="{StaticResource B.AccentText}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsStep}" Value="True">
+                                                <Setter TargetName="stepMark" Property="Text" Value="↳ "/>
+                                                <Setter TargetName="card" Property="Background" Value="#1A1F24"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </TabItem>
             </TabControl>
 
             <TextBlock Grid.Row="2" Text="{Binding [hdr.raw], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0,16,0,8"/>
@@ -623,48 +683,6 @@
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="{Binding [col.shares], Source={x:Static local:Loc.Instance}}" Binding="{Binding Shares}" Width="2*">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </DockPanel>
-                    </TabItem>
-                    <TabItem x:Name="GuardTab" Header="{Binding [tab.guards], Source={x:Static local:Loc.Instance}}">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="{Binding [guard.hint], Source={x:Static local:Loc.Instance}}" TextWrapping="Wrap" Margin="4" Foreground="{StaticResource B.Muted}"/>
-                            <DataGrid x:Name="GuardGrid" IsReadOnly="True">
-                                <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="{Binding [guard.col.machine], Source={x:Static local:Loc.Instance}}" Width="190">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Image Source="{Binding MachineIcon}" Width="22" Height="22" Margin="2,0,6,0"/>
-                                                    <TextBlock Text="{Binding MachineText}" VerticalAlignment="Center" TextWrapping="Wrap" Width="150"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="{Binding [guard.col.output], Source={x:Static local:Loc.Instance}}" Width="130">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Image Source="{Binding ItemIcon}" Width="22" Height="22" Margin="2,0,6,0"/>
-                                                    <TextBlock Text="{Binding ItemName}" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="{Binding [guard.col.level], Source={x:Static local:Loc.Instance}}" Binding="{Binding LevelText}"/>
-                                    <DataGridTextColumn Header="{Binding [guard.col.device], Source={x:Static local:Loc.Instance}}" Binding="{Binding Device}"/>
-                                    <DataGridTemplateColumn Header="{Binding [guard.col.how], Source={x:Static local:Loc.Instance}}" Width="260">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Choice, Mode=OneWay}" DisplayMemberPath="Label"
-                                                          SelectionChanged="ClogHow_Changed" ToolTip="{Binding [tip.clogHow], Source={x:Static local:Loc.Instance}}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="{Binding [guard.col.where], Source={x:Static local:Loc.Instance}}" Binding="{Binding Placement}" Width="*">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                 </DataGrid.Columns>

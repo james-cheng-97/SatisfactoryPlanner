@@ -433,6 +433,7 @@
                 <ControlTemplate TargetType="TabItem">
                     <Grid Background="Transparent" Margin="0,0,4,0">
                         <!-- (header look set on the header only: a TabItem's own font / colour would reach its whole page) -->
+                        <Border x:Name="pill" Margin="2,4,2,5" CornerRadius="6" BorderThickness="1" BorderBrush="Transparent" Background="Transparent"/>
                         <ContentPresenter x:Name="hdr" ContentSource="Header" Margin="12,8,12,9" HorizontalAlignment="Center"
                                           TextElement.Foreground="{StaticResource B.Muted}" TextElement.FontSize="13.5"/>
                         <Border x:Name="bar" Height="2" VerticalAlignment="Bottom" Background="{StaticResource B.Accent}" Visibility="Hidden" Margin="0,0,0,-1"/>
@@ -443,6 +444,14 @@
                             <Setter TargetName="bar" Property="Visibility" Value="Visible"/>
                             <Setter TargetName="hdr" Property="TextElement.Foreground" Value="#FFE9D2"/>
                             <Setter TargetName="hdr" Property="TextElement.FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                        <!-- Tag="warn": something on this tab needs attention (amber pill, even when not selected) -->
+                        <Trigger Property="Tag" Value="warn">
+                            <Setter TargetName="pill" Property="Background" Value="{StaticResource B.WarnSoft}"/>
+                            <Setter TargetName="pill" Property="BorderBrush" Value="#8A6A2A"/>
+                            <Setter TargetName="hdr" Property="TextElement.Foreground" Value="{StaticResource B.Warn}"/>
+                            <Setter TargetName="hdr" Property="TextElement.FontWeight" Value="SemiBold"/>
+                            <Setter TargetName="bar" Property="Background" Value="{StaticResource B.Warn}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

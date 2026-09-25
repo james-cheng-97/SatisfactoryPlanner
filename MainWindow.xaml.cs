@@ -196,7 +196,7 @@ public partial class MainWindow : Window
 
         TotalsGrid.ItemsSource = plan.Totals;
         SplitGrid.ItemsSource = plan.Splits;
-        GuardGrid.ItemsSource = plan.Guards;
+        GuardGrid.ItemsSource = ChainOrder(plan.Guards);
         // required guards: open (still a box) vs resolved (sink, generators, merge, or processed on into its own row)
         var req = plan.Guards.Where(g => g.Level == GuardLevel.Required).ToList();
         int open = req.Count(g => string.IsNullOrEmpty(g.Choice?.Key)), resolved = req.Count - open;
@@ -204,6 +204,7 @@ public partial class MainWindow : Window
             : open > 0 ? Loc.T("tab.guardsWarn", open)
             : resolved > 0 ? Loc.T("tab.guardsResolved", resolved)
             : Loc.T("tab.guardsCount", plan.Guards.Count);
+        GuardTab.Tag = open > 0 ? "warn" : null; // (amber tab while a surplus still ends in a box)
         SplitHint.Text = Loc.T(_settings.Mode == RoundingMode.Drained ? "split.hint" : "split.onlyDrained")
             + " " + Loc.T("belt.current", _settings.BeltLabel("Desc_IronPlate_C"), _settings.BeltLabel("Desc_Water_C"));
         _lastPlan = plan;
@@ -689,6 +690,24 @@ public partial class MainWindow : Window
         fig.Segments.Add(new System.Windows.Media.ArcSegment(end, new Size(r, r), 0, f > 0.5, System.Windows.Media.SweepDirection.Clockwise, true));
         LayoutRing.Data = new System.Windows.Media.PathGeometry([fig]);
     }
+
+    /// <summary>Clog guards as chains: every surplus of the plan, then under it the overflows its processing makes
+    /// (a step's machine processes the overflow of the card above), indented one level per step.</summary>
+    static List<ClogGuard> ChainOrder(List<ClogGuard> guards)
+    {
+        var list = new List<ClogGuard>();
+        void Add(ClogGuard g, int depth)
+        {
+            if (list.Contains(g) || depth > 8) return;
+            g.Depth = depth; list.Add(g);
+            foreach (var next in guards.Where(n => n.Row.Recipe.OverflowOf == g.Item)) Add(next, depth + 1);
+        }
+        foreach (var g in guards.Where(g => g.Row.Recipe.OverflowOf == null || !guards.Any(p => p.Item == g.Row.Recipe.OverflowOf))) Add(g, 0);
+        foreach (var g in guards) Add(g, 0); // (anything left: on its own)
+        return list;
+    }
+
+    void KpiClog_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => MainTabs.SelectedItem = GuardTab;
 
     /// <summary>Clog guards → how to process: a box, an AWESOME Sink, or a recipe that uses the surplus up.</summary>
     void ClogHow_Changed(object sender, SelectionChangedEventArgs e)
