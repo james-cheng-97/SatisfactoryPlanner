@@ -48,6 +48,8 @@ public class Settings
     public bool IndustrialFluidBox { get; set; }
     /// <summary>How long the place &amp; route planner may search (s). Short limits make big plans fall back to the row layout.</summary>
     public int LayoutSeconds { get; set; } = 120;
+    /// <summary>Window arrangement: "auto" (tall window → the settings go across the top), "wide" or "tall". App-wide.</summary>
+    public string ScreenLayout { get; set; } = "auto";
     /// <summary>Plastic + rubber plan: the user's answer to "use the recycling loop?" (null = not asked yet).</summary>
     public bool? PolymerLoopAnswer { get; set; }
     /// <summary>How a clogging surplus is dealt with, per item (overflow items "&lt;item&gt;@ovf" too): absent = overflow into

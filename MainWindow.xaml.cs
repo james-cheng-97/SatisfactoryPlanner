@@ -36,6 +36,8 @@ public partial class MainWindow : Window
         // no game data yet (a build from source ships none: it's the wiki's / Coffee Stain's): fetch it from the wiki
         Loaded += async (_, _) => { if (GameData.Recipes.Count == 0) await UpdateFromWikiAsync(); else await FetchMissingIcons(); };
         Closing += (_, _) => SaveSettings();
+        SizeChanged += (_, _) => ApplyScreenLayout();
+        Loaded += (_, _) => ApplyScreenLayout();
         // frosted glass: the layout underneath blurs while a busy overlay is up, so its labels don't fight the status text
         void Frost(object? _, DependencyPropertyChangedEventArgs __) =>
             LayoutScroll.Effect = LayoutBusy.IsVisible || ExportBusy.IsVisible ? new System.Windows.Media.Effects.BlurEffect { Radius = 10, KernelType = System.Windows.Media.Effects.KernelType.Gaussian } : null;
@@ -259,6 +261,56 @@ public partial class MainWindow : Window
         catch (Exception ex) { UnlockSummary.Text = Loc.T("analysisFailed", ex.Message); }
     }
 
+    // ---------- screen layout (wide / tall) and the menu ----------
+
+    bool _tall;
+    /// <summary>A tall window (a monitor on its side): the left panel's cards go across the top in columns, the layout
+    /// view gets the height, and the save / language / wiki buttons move into the menu.</summary>
+    void ApplyScreenLayout()
+    {
+        if (!IsLoaded) return;
+        string mode = _settings.ScreenLayout ?? "auto";
+        bool tall = mode == "tall" || mode == "auto" && ActualHeight > ActualWidth * 1.05;
+        _tall = tall;
+        DockPanel.SetDock(SidePanel, tall ? Dock.Top : Dock.Left);
+        SidePanel.Width = tall ? double.NaN : 370;
+        SidePanel.MaxHeight = tall ? Math.Max(240, ActualHeight * 0.28) : double.PositiveInfinity;
+        // the views get the height; raw resources / outputs stay a short strip at the bottom
+        ResultsGrid.RowDefinitions[1].Height = new GridLength(tall ? 4 : 3, GridUnitType.Star);
+        ResultsGrid.RowDefinitions[3].Height = new GridLength(tall ? 1.2 : 2, GridUnitType.Star);
+        double avail = tall ? Math.Max(320, ActualWidth - 50) : 338;
+        int cols = tall ? Math.Max(1, (int)((avail + 12) / 310)) : 1;
+        SideStack.ItemWidth = tall ? Math.Floor((avail + 12) / cols) : 338;
+        foreach (var c in SideStack.Children.OfType<FrameworkElement>()) c.Margin = tall ? new Thickness(0, 0, 12, 12) : new Thickness(0, 0, 0, 12);
+        var v = tall ? Visibility.Collapsed : Visibility.Visible;
+        LanguageCombo.Visibility = v; UpdateButton.Visibility = v; LoadSaveButton.Visibility = v;
+        ScreenAuto.IsChecked = mode == "auto"; ScreenWide.IsChecked = mode == "wide"; ScreenTall.IsChecked = mode == "tall";
+        UpdateSaveUi();
+    }
+
+    void ScreenLayout_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.ScreenLayout = sender == ScreenWide ? "wide" : sender == ScreenTall ? "tall" : "auto";
+        ApplyScreenLayout();
+    }
+
+    void MenuOpen_Click(object sender, RoutedEventArgs e)
+    {
+        MenuPlanTitle.Text = Loc.T("menu.plan", _active.Name);
+        UpdateSaveUi();
+        MenuOverlay.Visibility = Visibility.Visible;
+    }
+    void MenuClose_Click(object sender, RoutedEventArgs e) => MenuOverlay.Visibility = Visibility.Collapsed;
+    void MenuRename_Click(object sender, RoutedEventArgs e) { MenuClose_Click(sender, e); Rename(_active); }
+    void MenuDuplicate_Click(object sender, RoutedEventArgs e) { MenuClose_Click(sender, e); PlanTabDuplicate_Click(this, e); }
+    void MenuClosePlan_Click(object sender, RoutedEventArgs e) { MenuClose_Click(sender, e); PlanTabClose_Click(this, e); }
+    void MenuExport_Click(object sender, RoutedEventArgs e)
+    {
+        MenuClose_Click(sender, e);
+        MainTabs.SelectedItem = LayoutTab; // (the layout is built there first, if it isn't yet)
+        if (_layout != null) ExportBlueprints_Click(ExportBpButton, e);
+    }
+
     void UseSave_Click(object sender, RoutedEventArgs e)
     {
         _settings.UseSave = UseSaveToggle.IsChecked == true;
@@ -275,6 +327,12 @@ public partial class MainWindow : Window
         ForgetSaveButton.Visibility = _settings.Unlocked != null ? Visibility.Visible : Visibility.Collapsed;
         AltCheck.IsEnabled = MamCheck.IsEnabled = !fromSave;
         AltCheck.ToolTip = MamCheck.ToolTip = fromSave ? Loc.T("save.tooltip") : null;
+        // the menu mirrors the save; on a tall screen the top bar's save buttons live only there
+        MenuSaveName.Text = string.IsNullOrEmpty(SaveText.Text) ? Loc.T("menu.noSave") : SaveText.Text;
+        MenuSaveDot.Visibility = _settings.Unlocked != null ? Visibility.Visible : Visibility.Collapsed;
+        MenuUseSave.Visibility = UseSaveToggle.Visibility == Visibility.Visible || _tall && _settings.Unlocked != null ? Visibility.Visible : Visibility.Collapsed;
+        MenuForgetSave.IsEnabled = _settings.Unlocked != null;
+        if (_tall) { UseSaveToggle.Visibility = Visibility.Collapsed; ForgetSaveButton.Visibility = Visibility.Collapsed; }
     }
 
     void LoadSave_Click(object sender, RoutedEventArgs e)
@@ -373,6 +431,7 @@ public partial class MainWindow : Window
         st.UseSave = _settings.UseSave;
         st.Language = _settings.Language;
         st.CountExtractors = _settings.CountExtractors;
+        st.ScreenLayout = _settings.ScreenLayout;
         st.Targets = st.Targets.Where(x => x.Item != null).Select(x => new TargetSpec { Item = x.Item, Rate = x.Rate }).ToList();
         _settings = st;
     }

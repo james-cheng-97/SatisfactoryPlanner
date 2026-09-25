@@ -12,16 +12,20 @@
             </StackPanel>
         </DataTemplate>
     </Window.Resources>
-    <DockPanel>
+    <Grid>
+    <DockPanel x:Name="Shell">
         <Border DockPanel.Dock="Top" Background="{StaticResource B.Bar}" BorderBrush="{StaticResource B.Line}" BorderThickness="0,0,0,1" Padding="16,10">
             <DockPanel>
+                <Button DockPanel.Dock="Right" x:Name="MenuButton" Width="36" Height="32" Padding="0" Margin="6,0,0,0" Click="MenuOpen_Click" ToolTip="{Binding [menu.open], Source={x:Static local:Loc.Instance}}">
+                    <Path Data="M0,0 H16 M0,6 H16 M0,12 H16" Stroke="{StaticResource B.TextSoft}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                </Button>
                 <ComboBox DockPanel.Dock="Right" x:Name="LanguageCombo" Width="100" Margin="6,0,0,0" DisplayMemberPath="Item2" SelectedValuePath="Item1"
                           SelectionChanged="Language_Changed" VerticalContentAlignment="Center"/>
-                <Button DockPanel.Dock="Right" Content="{Binding [btn.update], Source={x:Static local:Loc.Instance}}" Click="UpdateFromWiki_Click"/>
+                <Button DockPanel.Dock="Right" x:Name="UpdateButton" Content="{Binding [btn.update], Source={x:Static local:Loc.Instance}}" Click="UpdateFromWiki_Click"/>
                 <ToggleButton DockPanel.Dock="Right" x:Name="UseSaveToggle" Content="{Binding [btn.useSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,6,0"
                               Click="UseSave_Click" Visibility="Collapsed" ToolTip="{Binding [tip.useSave], Source={x:Static local:Loc.Instance}}"/>
                 <Button DockPanel.Dock="Right" x:Name="ForgetSaveButton" Content="{Binding [btn.forgetSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,6,0" Click="ForgetSave_Click" Visibility="Collapsed"/>
-                <Button DockPanel.Dock="Right" Content="{Binding [btn.loadSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,6,0" Click="LoadSave_Click"/>
+                <Button DockPanel.Dock="Right" x:Name="LoadSaveButton" Content="{Binding [btn.loadSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,6,0" Click="LoadSave_Click"/>
                 <Border DockPanel.Dock="Right" Margin="0,0,12,0" VerticalAlignment="Center" CornerRadius="14" Padding="12,5"
                         Background="{StaticResource B.Card}" BorderBrush="{StaticResource B.Line}" BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
@@ -87,8 +91,8 @@
         </Border>
 
         <!-- Settings -->
-        <ScrollViewer DockPanel.Dock="Left" Width="370" VerticalScrollBarVisibility="Auto" Background="{StaticResource B.Panel}">
-            <StackPanel Margin="16">
+        <ScrollViewer x:Name="SidePanel" DockPanel.Dock="Left" Width="370" VerticalScrollBarVisibility="Auto" Background="{StaticResource B.Panel}">
+            <WrapPanel x:Name="SideStack" Margin="16" ItemWidth="338">
                 <GroupBox Header="{Binding [grp.targets], Source={x:Static local:Loc.Instance}}">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,4" ToolTip="{Binding [tip.productSearch], Source={x:Static local:Loc.Instance}}">
@@ -249,11 +253,11 @@
                     </StackPanel>
                 </Expander>
 
-            </StackPanel>
+            </WrapPanel>
         </ScrollViewer>
 
         <!-- Results -->
-        <Grid Margin="20,16,20,16">
+        <Grid x:Name="ResultsGrid" Margin="20,16,20,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="3*"/>
@@ -712,4 +716,58 @@
             </Grid>
         </Grid>
     </DockPanel>
+
+    <!-- the menu: save, this plan, app settings (the only way to them on a tall screen) -->
+    <Grid x:Name="MenuOverlay" Visibility="Collapsed">
+        <Border Background="#9E08090B" MouseLeftButtonUp="MenuClose_Click"/>
+        <Border HorizontalAlignment="Right" Width="400" Background="{StaticResource B.Panel}" BorderBrush="{StaticResource B.Line}" BorderThickness="1,0,0,0">
+            <DockPanel Margin="20,18">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,20">
+                    <Button DockPanel.Dock="Right" Content="✕" Width="36" Height="36" Padding="0" Click="MenuClose_Click" ToolTip="{Binding [menu.close], Source={x:Static local:Loc.Instance}}"/>
+                    <TextBlock Text="{Binding [menu.title], Source={x:Static local:Loc.Instance}}" FontFamily="{StaticResource F.Display}" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding [menu.footer], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="{Binding [menu.save], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,22">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <Ellipse x:Name="MenuSaveDot" Width="8" Height="8" Fill="{StaticResource B.Good}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="MenuSaveName" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="300"/>
+                                </StackPanel>
+                                <CheckBox x:Name="MenuUseSave" Content="{Binding [menu.useSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,0,12"
+                                          IsChecked="{Binding IsChecked, ElementName=UseSaveToggle, Mode=TwoWay}" Click="UseSave_Click"/>
+                                <UniformGrid Columns="2">
+                                    <Button Content="{Binding [btn.loadSave], Source={x:Static local:Loc.Instance}}" Margin="0,0,6,0" Click="LoadSave_Click"/>
+                                    <Button x:Name="MenuForgetSave" Content="{Binding [btn.forgetSave], Source={x:Static local:Loc.Instance}}" Margin="6,0,0,0" Click="ForgetSave_Click"/>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="MenuPlanTitle" Style="{StaticResource SectionTitle}"/>
+                        <StackPanel Margin="0,0,0,22">
+                            <Button Content="{Binding [tabs.rename], Source={x:Static local:Loc.Instance}}" Style="{StaticResource MenuRow}" Click="MenuRename_Click"/>
+                            <Button Content="{Binding [tabs.duplicateActive], Source={x:Static local:Loc.Instance}}" Style="{StaticResource MenuRow}" Click="MenuDuplicate_Click"/>
+                            <Button Content="{Binding [btn.exportBp], Source={x:Static local:Loc.Instance}}" Style="{StaticResource MenuRow}" Click="MenuExport_Click"/>
+                            <Button Content="{Binding [tabs.close], Source={x:Static local:Loc.Instance}}" Style="{StaticResource MenuRow}" Foreground="#F2A8A0" Click="MenuClosePlan_Click"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding [menu.app], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding [menu.language], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" Margin="0,0,0,4"/>
+                        <ComboBox x:Name="MenuLanguage" DisplayMemberPath="Item2" SelectedValuePath="Item1" Margin="0,0,0,12"
+                                  ItemsSource="{Binding ItemsSource, ElementName=LanguageCombo}" SelectedValue="{Binding SelectedValue, ElementName=LanguageCombo, Mode=TwoWay}"/>
+                        <TextBlock Text="{Binding [menu.screen], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" Margin="0,0,0,4"/>
+                        <UniformGrid Columns="3" Margin="0,0,0,12">
+                            <RadioButton x:Name="ScreenAuto" GroupName="screen" Content="{Binding [screen.auto], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
+                            <RadioButton x:Name="ScreenWide" GroupName="screen" Content="{Binding [screen.wide], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
+                            <RadioButton x:Name="ScreenTall" GroupName="screen" Content="{Binding [screen.tall], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
+                        </UniformGrid>
+                        <Button Content="{Binding [btn.update], Source={x:Static local:Loc.Instance}}" HorizontalAlignment="Stretch" Click="UpdateFromWiki_Click"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+    </Grid>
 </Window>
