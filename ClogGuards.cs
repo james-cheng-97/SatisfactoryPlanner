@@ -24,7 +24,13 @@ public class ClogGuard
     public bool AllAway { get; init; }
     public string Device => AllAway ? Loc.T("guard.routeAway") : (Lines > 1 ? $"{Lines}× " : "") + Loc.T(Fluid ? "guard.valve" : "guard.smart");
     public string Placement { get; init; } = "";
+    /// <summary>How to process the surplus: "" = overflow into a box, "sink", or a recipe class.</summary>
+    public List<ClogOption> Options { get; init; } = new();
+    public ClogOption? Choice { get; set; }
 }
+
+/// <summary>One way to deal with a clogging surplus (Clog guards → how to process).</summary>
+public record ClogOption(string Key, string Label);
 
 /// <summary>
 /// Clog detection. A machine with several outputs (refinery, blender, packager, particle accelerator, converter…)
@@ -40,10 +46,54 @@ public static class ClogGuards
 {
     public const string Valve = "Desc_Valve_C", Junction = "Desc_PipelineJunction_Cross_C", Smart = "Desc_ConveyorAttachmentSplitterSmart_C";
 
-    public static List<ClogGuard> Find(Plan plan, SolveResult sol)
+    /// <summary>Ways to deal with a surplus of an item: a box (fills up — not safe), an AWESOME Sink (items; not fluids),
+    /// generators (fuels), merging into that product's output through a smart splitter with a sink on Overflow (an overflow
+    /// of one of the plan's products), or a direct recipe (the surplus + raw resources only) whose products are new
+    /// overflows to deal with in turn.</summary>
+    public static List<ClogOption> OptionsFor(string item, Settings s)
+    {
+        var o = new List<ClogOption> { new("", Loc.T("clog.box")) };
+        var baseItem = GameData.BaseItem(item);
+        bool fluid = GameData.Item(item).IsFluid;
+        if (!fluid) o.Add(new(Settings.SinkHandling, Loc.T("clog.sink")));
+        foreach (var g in OverflowChain.GeneratorsFor(item))
+            o.Add(new(OverflowChain.GenPrefix + g.building, Loc.T("clog.gen", GameData.Buildings.GetValueOrDefault(g.building)?.Name ?? g.building, g.rate, g.mw)));
+        if (!fluid && OverflowChain.IsOverflow(item) && s.Targets.Any(t => t.Rate > 0 && t.Item == baseItem))
+            o.Add(new(OverflowChain.Merge, Loc.T("clog.merge", GameData.Item(baseItem).Name)));
+        foreach (var r in GameData.Recipes.Where(r => s.IsAvailable(r) && r.In.Any(a => a.Item == baseItem) && r.Out.Count > 0 && r.Out.All(a => a.Item != baseItem)
+                     && r.In.All(a => a.Item == baseItem || GameData.RawResources.Contains(a.Item))
+                     && r.Building is not ("Desc_Packager_C" or "Desc_Converter_C"))
+                     .OrderBy(r => r.Alternate).ThenBy(r => r.Name))
+        {
+            string Names(IEnumerable<Amount> l) => string.Join(" + ", l.Select(a => GameData.Item(a.Item).Name));
+            o.Add(new(r.ClassName, Loc.T("clog.recipe", (r.Alternate ? Loc.T("alt") : "") + r.Name, Names(r.In), Names(r.Out))));
+        }
+        return o;
+    }
+
+    /// <summary>Safe ends of an overflow: nothing downstream can fill up.</summary>
+    public static bool Safe(string key) => key == Settings.SinkHandling || key == OverflowChain.Merge || key.StartsWith(OverflowChain.GenPrefix);
+
+    public static List<ClogGuard> Find(Plan plan, SolveResult sol, Settings s)
     {
         var guards = new List<ClogGuard>();
-        foreach (var row in plan.Machines.Where(m => m.Recipe.Out.Count > 1))
+        // machines of an overflow chain: every product is a new overflow (it only exists while there is surplus)
+        foreach (var row in plan.Machines.Where(m => m.Recipe.OverflowOf != null))
+            foreach (var output in row.Recipe.Out)
+            {
+                double made = row.Recipe.PerMin(output.Value) * row.Exact;
+                if (made <= 1e-6) continue;
+                var options = OptionsFor(output.Item, s);
+                var choice = options.FirstOrDefault(o => o.Key == s.ClogHandling.GetValueOrDefault(output.Item, "")) ?? options[0];
+                bool fl = GameData.Item(output.Item).IsFluid;
+                guards.Add(new ClogGuard
+                {
+                    Row = row, Item = output.Item, Fluid = fl, Level = GuardLevel.Required, Produced = made, Surplus = made, AllAway = true,
+                    Placement = Loc.T("clog.chain", GameData.Item(output.Item).Name, row.Recipe.Name, made, fl ? "m³/min" : "/min") + " " + How(choice),
+                    Options = options, Choice = choice
+                });
+            }
+        foreach (var row in plan.Machines.Where(m => m.Recipe.Out.Count > 1 && m.Recipe.OverflowOf == null))
         {
             foreach (var output in row.Recipe.Out)
             {
@@ -72,14 +122,24 @@ public static class ClogGuards
                         : Loc.T("guard.smartHow", row.BuildingName, who, surplus / lines);
                 if (level == GuardLevel.Recommended) placement += " " + Loc.T("guard.recommendedWhy", who);
                 if (lines > 1) placement += " " + Loc.T("guard.perLine", lines);
+                var options = OptionsFor(item, s);
+                var choice = options.FirstOrDefault(o => o.Key == s.ClogHandling.GetValueOrDefault(item, "")) ?? options[0];
+                placement += " " + How(choice);
 
                 guards.Add(new ClogGuard
                 {
                     Row = row, Item = item, Fluid = fluid, Level = level.Value, Produced = produced,
-                    ConsumerNeed = consumerNeed, Surplus = surplus, Lines = lines, Placement = placement, AllAway = allAway
+                    ConsumerNeed = consumerNeed, Surplus = surplus, Lines = lines, Placement = placement, AllAway = allAway,
+                    Options = options, Choice = choice
                 });
             }
         }
         return guards.OrderBy(g => g.Level).ThenBy(g => g.Row.ItemName).ToList();
+
+        static string How(ClogOption c) => c.Key == "" ? Loc.T("clog.boxHow")
+            : c.Key == Settings.SinkHandling ? Loc.T("clog.sinkHow")
+            : c.Key == OverflowChain.Merge ? Loc.T("clog.mergeHow")
+            : c.Key.StartsWith(OverflowChain.GenPrefix) ? Loc.T("clog.genHow")
+            : Loc.T("clog.recipeHow", c.Label);
     }
 }

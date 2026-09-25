@@ -160,9 +160,13 @@ public partial class Layout
         "Desc_StorageContainerMk2_C" => (5, 10), // Industrial Storage Container
         "Desc_PipeStorageTank_C" => (4, 4),      // Fluid Buffer
         "Desc_IndustrialTank_C" => (12, 12),     // Industrial Fluid Buffer (its connections 6 m out either side, measured in a save)
+        "Desc_ResourceSink_C" => (16, 13),       // AWESOME Sink (wiki; its one input 5 m out from the centre, measured in a save)
+        "Desc_GeneratorFuel_C" => (20, 20),      // Fuel-Powered Generator (wiki; pipe input 8.6 m out, measured in a save)
+        "Desc_GeneratorCoal_C" => (10, 26),      // Coal-Powered Generator (wiki; belt + water 11 m out, measured in a save)
         _ => (10, 10),
     };
 
+    public const string SinkBox = "Desc_ResourceSink_C";
     /// <summary>Building height in metres (satisfactory.wiki.gg infoboxes).</summary>
     public static double HeightOf(string building) => building switch
     {
@@ -180,6 +184,9 @@ public partial class Layout
         "Desc_StorageContainerMk2_C" => 8,
         "Desc_PipeStorageTank_C" => 8,
         "Desc_IndustrialTank_C" => 12, // (not verified in game)
+        "Desc_ResourceSink_C" => 24,
+        "Desc_GeneratorFuel_C" => 27,
+        "Desc_GeneratorCoal_C" => 36,
         _ => 12,
     };
     /// <summary>Belts may be lifted over machines up to this height; taller ones must be routed around.</summary>
@@ -201,6 +208,8 @@ public partial class Layout
             "Desc_ManufacturerMk1_C" => ([6, 2, -2, -6], [], [0], []),
             "Desc_OilRefinery_C" => ([2], [-2], [2], [-2]),     // item ports east, pipe ports west (as built in game, not turned)
             "Desc_Packager_C" => ([0], [0], [0], [0]),
+            "Desc_GeneratorFuel_C" => ([], [0], [], []),
+            "Desc_GeneratorCoal_C" => ([2], [-2], [], []),       // like the refinery: belt east, water west
             _ => (Even(items + pipes).Take(items).ToArray(), Even(items + pipes).Skip(items).ToArray(),
                   Even(itemOuts + pipeOuts).Take(itemOuts).ToArray(), Even(itemOuts + pipeOuts).Skip(itemOuts).ToArray()),
         };
@@ -618,7 +627,8 @@ public partial class Layout
         // ---- station ("pins"): the boxes are blocks too — one group for inputs + real outputs, one for the spare boxes.
         //      Input boxes feed the row's output belts (north face), output boxes take from its input belts (south face),
         //      so they are wired exactly like machines: straight to the trunk of their item, nothing runs around outside.
-        string Box(Lane l) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C") : "Desc_StorageContainerMk2_C";
+        string Box(Lane l, GraphNode? n = null) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
+            : n?.Kind == NodeKind.Surplus && s.Sinks(l.Item.Split('#')[0]) ? SinkBox : "Desc_StorageContainerMk2_C";
         Block? Station(IEnumerable<(GraphNode node, Lane lane, double rate)> ins, IEnumerable<(GraphNode node, Lane lane, double rate)> outs)
         {
             var slots = new List<Slot>();
@@ -632,8 +642,8 @@ public partial class Layout
             if (slots.Count > 0 && outs.Any()) x += Foundation - 2; // inputs and outputs a foundation apart
             foreach (var w in outs.OrderBy(w => w.lane.Id))
             {
-                var (cw, cd) = Footprint(Box(w.lane));
-                slots.Add(new Slot(w.node, w.lane, w.rate, false, Box(w.lane), cw, cd, x));
+                var (cw, cd) = Footprint(Box(w.lane, w.node));
+                slots.Add(new Slot(w.node, w.lane, w.rate, false, Box(w.lane, w.node), cw, cd, x));
                 x += cw + 2;
             }
             if (slots.Count == 0) return null;
@@ -1199,7 +1209,7 @@ public partial class Layout
         double shift = SnapTo(Math.Max(0, 2 - trunkCols.Select(tc => tc.x).DefaultIfEmpty(2).Min()), Foundation);
         if (shift > 0) { L.Shift(shift); maxX += shift; }
         // the open areas above tall machines, on every floor above
-        foreach (var tb in L.Buildings.Where(b => b.Floor == 0 && b.Kind == "machine" && HeightOf(b.Building) > 15).ToList())
+        foreach (var tb in L.Buildings.Where(b => b.Floor == 0 && b.Kind is "machine" or "surplus" && HeightOf(b.Building) > 15).ToList())
             for (int f = 1; f < L.Floors; f++)
                 L.Buildings.Add(new Placed("hole", "", Loc.T("layout.openAbove", GameData.Buildings.GetValueOrDefault(tb.Building)?.Name ?? ""), tb.X - 1, tb.Y - 1, tb.W + 2, tb.H + 2, Floor: f));
         L.Width = SnapTo(maxX, Foundation);

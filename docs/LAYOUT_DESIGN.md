@@ -165,6 +165,19 @@ the machines' input slots are the buffer, no storage container. Plastic and rubb
 the output on Overflow (`Splitters.Plan(loopFirst)`, and the export treats their output boxes like overflow boxes), so
 the other side's refineries are always fed first and the loop can't run dry. Test: scratchpad `QUICK=10 [MODE=..] [LAYOUT=1]`.
 
+### 2.10d Clog guards: overflow chains (app, `OverflowChain.cs`, `ClogGuards.OptionsFor`, `Settings.ClogHandling`)
+A clogging surplus is only safe when it ends where nothing fills up: an AWESOME Sink (items) or generators (fuels:
+fuel / coal generators). A box fills, and an output is never guaranteed to be taken (user, 2026-09-25). Processing a
+surplus with a direct recipe (the surplus + raw resources only) makes a NEW overflow — its product only exists while
+there is surplus, so it never counts towards the targets: it's kept as its own item `<item>@ovf` with its own guard row
+and handling (process again, burn, sink, or merge into that product's output through a smart splitter with a sink on
+Overflow — the merger is finished by hand, the export warns). The main plan is solved as usual and never changed; the
+chain (machines, water, generators' power) is added on top (`OverflowChain.Apply`). Overflow steps are uncapped
+consumers (smart splitter Overflow) in the splitter plan, and the export makes the splitter feeding them smart.
+Sizes / ports: sink 16 × 13 m (24 m), input 5 m out; fuel generator 20 × 20 (27 m), pipe 8.6 m out; coal generator
+10 × 26 (36 m), belt + water 11 m out — ports measured in the player's save, templates from it too.
+Tests: scratchpad `QUICK=10 CLOG=.. CLOG2=..` (loop resin chain), `QUICK=12` (heavy oil → Residual Fuel → generator).
+
 ### 2.11 In-game test saves (scratchpad `bp/`)
 `inject.js` puts a factory's tile blueprints (write.js objects, `DUMP_OBJECTS=1`) into a copy of a save, 50 m east / 100 m
 up from the player (`STRIP=1` removes an earlier injection: names 2100000000–2100099999). `testrun.js` then joins every

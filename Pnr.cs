@@ -292,7 +292,7 @@ public partial class Layout
             (Corr, LooseAt) = (false, 0); TwoStage = false; NarrowLanes = false;
             if (l == null) { UsedTiles = null; return null; }
             if (f == 0)
-                foreach (var b in l.Buildings.Where(b => b.Kind == "machine" && HeightOf(b.Building) > 15))
+                foreach (var b in l.Buildings.Where(b => b.Kind is "machine" or "surplus" && HeightOf(b.Building) > 15))
                     holes.Add((b.X - 1, b.Y - 1, b.W + 2, b.H + 2, Loc.T("layout.openAbove", GameData.Buildings.GetValueOrDefault(b.Building)?.Name ?? "")));
             per.Add(l);
             foreach (var (id, pos) in l.RiserSpots) if (!riserPos.ContainsKey(id)) riserPos[id] = pos;
@@ -475,13 +475,15 @@ public partial class Layout
                 });
             }
         }
-        string BoxOf(Lane l) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C") : "Desc_StorageContainerMk2_C";
+        string BoxOf(Lane l, GraphNode n) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
+            : n.Kind == NodeKind.Surplus && s.Sinks(l.Item.Split('#')[0]) ? SinkBox : "Desc_StorageContainerMk2_C";
         foreach (var (node, lane, rate) in padIn.Concat(padOut))
         {
             if (fc != null && fc.Floor != 0) break; // the boxes are on the ground floor
             bool input = padIn.Any(w => w.node == node && w.lane == lane);
-            var (bw, bd) = Footprint(BoxOf(lane));
-            cells.Add(new Cell { Node = node, Building = BoxOf(lane), W = bw, D = bd, Pad = new Slot(node, lane, rate, input, BoxOf(lane), bw, bd, 0), Spare = node.Kind == NodeKind.Surplus });
+            var box = BoxOf(lane, node);
+            var (bw, bd) = Footprint(box);
+            cells.Add(new Cell { Node = node, Building = box, W = bw, D = bd, Pad = new Slot(node, lane, rate, input, box, bw, bd, 0), Spare = node.Kind == NodeKind.Surplus });
         }
         if (fc != null)
         {

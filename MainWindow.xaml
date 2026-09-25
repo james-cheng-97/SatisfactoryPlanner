@@ -563,6 +563,14 @@
                                     </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="{Binding [guard.col.level], Source={x:Static local:Loc.Instance}}" Binding="{Binding LevelText}"/>
                                     <DataGridTextColumn Header="{Binding [guard.col.device], Source={x:Static local:Loc.Instance}}" Binding="{Binding Device}"/>
+                                    <DataGridTemplateColumn Header="{Binding [guard.col.how], Source={x:Static local:Loc.Instance}}" Width="260">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Choice, Mode=OneWay}" DisplayMemberPath="Label"
+                                                          SelectionChanged="ClogHow_Changed" ToolTip="{Binding [tip.clogHow], Source={x:Static local:Loc.Instance}}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="{Binding [guard.col.where], Source={x:Static local:Loc.Instance}}" Binding="{Binding Placement}" Width="*">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>

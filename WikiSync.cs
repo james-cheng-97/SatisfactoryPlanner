@@ -109,6 +109,7 @@ public static class ImageCache
 
     public static ImageSource? Get(string cls)
     {
+        cls = GameData.BaseItem(cls); // (an overflow item shows its item's icon)
         if (Cache.TryGetValue(cls, out var img)) return img;
         img = null;
         var path = PathFor(cls);

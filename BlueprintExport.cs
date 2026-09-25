@@ -24,6 +24,9 @@ public static class BlueprintExport
         ["Build_Packager_C"] = [("Input0", 0, -300, 100, true, false), ("PipeInputFactory", 0, -380, 375, true, true),
                                 ("Output1", 0, 300, 100, false, false), ("PipeOutputFactory", 0, 380, 375, false, true)],
         ["Build_StorageContainerMk2_C"] = [("Input0", 0, -400, 100, true, false), ("Output1", 0, 400, 100, false, false)],
+        ["Build_ResourceSink_C"] = [("Input0", 0, 500, 100, true, false)],
+        ["Build_GeneratorFuel_C"] = [("FGPipeConnectionFactory", 0, -860, 175, true, true)],
+        ["Build_GeneratorCoal_C"] = [("Input0", 200, 1100, 100, true, false), ("FGPipeConnectionFactory", -200, 1142, 175, true, true)],
         ["Build_PipeStorageTank_C"] = [("ConnectionAny0", 0, 200, 175, true, true), ("ConnectionAny1", 0, -200, 175, false, true)],
         ["Build_IndustrialTank_C"] = [("ConnectionAny0", 0, 600, 175, true, true), ("ConnectionAny1", 0, -600, 175, false, true)], // (measured: pipes on one in a save)
     };
@@ -74,6 +77,10 @@ public static class BlueprintExport
         // ---- buildings: machines and station boxes, turned so their input side faces south (game +Y) ----
         var surplusIds = new HashSet<string>(); // overflow (surplus) boxes
         bool loop = PolymerLoop.Applies(s) && PolymerLoop.IsOn(s);
+        var overflowFed = new HashSet<string>(); // machines of an overflow chain: they only get what's left over
+        // an overflow merged into its product's output: the layout ends it in a sink; the merge itself is finished by hand
+        foreach (var (item, h) in s.ClogHandling.Where(kv => kv.Value == OverflowChain.Merge && L.Buildings.Any(b => b.Kind == "surplus" && b.Item?.Split('#')[0] == kv.Key)))
+            warnings.Add($"merge by hand: {GameData.Item(item).Name} — on its way to the AWESOME Sink, turn its splitter's other output into a merger on the {GameData.Item(GameData.BaseItem(item)).Name} output belt (the sink keeps the Overflow)");
         var portsAt = new List<(string id, string port, double X, double Y, double Z, bool input, bool pipe)>();
         int n = 0;
         foreach (var b in L.Buildings.Where(b => b.Kind != "hole" && b.Floor < floors))
@@ -103,7 +110,10 @@ public static class BlueprintExport
                     hand.Add($"{GameData.Buildings.GetValueOrDefault(b.Building)?.Name} ({GameData.Item(b.Item ?? "").Name}){(b.Floor > 0 ? $" F{b.Floor}" : "")} at foundation ({b.X / Layout.Foundation:0.##}, {b.Y / Layout.Foundation:0.##}), {yaw:0}°");
                 }
             }
-            ents.Add(new Entity(id, cls, X, Y, zb, yaw, b.Recipe, fill: b.Kind == "input" ? b.Item?.Split('#')[0] : null));
+            // (an overflow step's recipe is its game recipe; a generator has none)
+            string? recipe = b.Recipe == null || b.Recipe.StartsWith(OverflowChain.BurnPrefix) ? null : b.Recipe.Split('|')[0];
+            ents.Add(new Entity(id, cls, X, Y, zb, yaw, recipe, fill: b.Kind == "input" ? b.Item?.Split('#')[0] : null));
+            if (b.Kind == "machine" && b.Recipe != null && (b.Recipe.Contains('|') || b.Recipe.StartsWith(OverflowChain.BurnPrefix))) overflowFed.Add(id);
             if (b.Kind == "surplus") surplusIds.Add(id);
             // plastic / rubber recycling loop: the other side's refineries first, only the surplus leaves (never runs dry)
             else if (b.Kind == "output" && loop && b.Item?.Split('#')[0] is PolymerLoop.Plastic or PolymerLoop.Rubber) surplusIds.Add(id);
@@ -471,9 +481,10 @@ public static class BlueprintExport
         // overflow only takes what the machines don't (user, 2026-09-24)
         {
             int smart = 0;
-            foreach (var sid in surplusIds)
+            foreach (var (sid, first) in surplusIds.Select(i => (i, links.FirstOrDefault(l => l.to?.id == i)))
+                         .Concat(overflowFed.SelectMany(i => links.Where(l => l.to?.id == i && !l.cls.Contains("Pipeline")).Select(l => (i, (Link?)l)))))
             {
-                var cur = links.FirstOrDefault(l => l.to?.id == sid);
+                var cur = first;
                 for (int guard = 0; cur?.from != null && guard < 50; guard++)
                 {
                     var f = cur.from;

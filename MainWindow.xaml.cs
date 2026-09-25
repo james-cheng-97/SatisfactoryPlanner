@@ -194,8 +194,13 @@ public partial class MainWindow : Window
         TotalsGrid.ItemsSource = plan.Totals;
         SplitGrid.ItemsSource = plan.Splits;
         GuardGrid.ItemsSource = plan.Guards;
-        int requiredGuards = plan.Guards.Count(g => g.Level == GuardLevel.Required);
-        GuardTab.Header = requiredGuards > 0 ? Loc.T("tab.guardsWarn", requiredGuards) : Loc.T("tab.guardsCount", plan.Guards.Count);
+        // required guards: open (still a box) vs resolved (sink, generators, merge, or processed on into its own row)
+        var req = plan.Guards.Where(g => g.Level == GuardLevel.Required).ToList();
+        int open = req.Count(g => string.IsNullOrEmpty(g.Choice?.Key)), resolved = req.Count - open;
+        GuardTab.Header = open > 0 && resolved > 0 ? Loc.T("tab.guardsMixed", open, resolved)
+            : open > 0 ? Loc.T("tab.guardsWarn", open)
+            : resolved > 0 ? Loc.T("tab.guardsResolved", resolved)
+            : Loc.T("tab.guardsCount", plan.Guards.Count);
         SplitHint.Text = Loc.T(_settings.Mode == RoundingMode.Drained ? "split.hint" : "split.onlyDrained")
             + " " + Loc.T("belt.current", _settings.BeltLabel("Desc_IronPlate_C"), _settings.BeltLabel("Desc_Water_C"));
         _lastPlan = plan;
@@ -669,6 +674,15 @@ public partial class MainWindow : Window
         var fig = new System.Windows.Media.PathFigure { StartPoint = new Point(cx, cy - r) };
         fig.Segments.Add(new System.Windows.Media.ArcSegment(end, new Size(r, r), 0, f > 0.5, System.Windows.Media.SweepDirection.Clockwise, true));
         LayoutRing.Data = new System.Windows.Media.PathGeometry([fig]);
+    }
+
+    /// <summary>Clog guards → how to process: a box, an AWESOME Sink, or a recipe that uses the surplus up.</summary>
+    void ClogHow_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || sender is not ComboBox cb || cb.DataContext is not ClogGuard g || cb.SelectedItem is not ClogOption o || !cb.IsKeyboardFocusWithin && !cb.IsDropDownOpen && e.RemovedItems.Count == 0) return;
+        if (o.Key == (_settings.ClogHandling.GetValueOrDefault(g.Item) ?? "")) return;
+        if (o.Key == "") _settings.ClogHandling.Remove(g.Item); else _settings.ClogHandling[g.Item] = o.Key;
+        Dispatcher.BeginInvoke(Recalculate);
     }
 
     void TankCheck_Click(object sender, RoutedEventArgs e)

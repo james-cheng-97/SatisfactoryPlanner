@@ -50,6 +50,14 @@ public class Settings
     public int LayoutSeconds { get; set; } = 120;
     /// <summary>Plastic + rubber plan: the user's answer to "use the recycling loop?" (null = not asked yet).</summary>
     public bool? PolymerLoopAnswer { get; set; }
+    /// <summary>How a clogging surplus is dealt with, per item (overflow items "&lt;item&gt;@ovf" too): absent = overflow into
+    /// a box (fills up), "sink" = an AWESOME Sink, "gen:&lt;building&gt;" = burnt in generators, "merge" = into that
+    /// product's output through a smart splitter (Overflow to a sink), or a recipe class = processed (its products are new
+    /// overflows). See OverflowChain.</summary>
+    public Dictionary<string, string> ClogHandling { get; set; } = new();
+    public const string SinkHandling = "sink";
+    /// <summary>The overflow of this item ends in an AWESOME Sink (sunk, or merged with a sink behind the smart splitter).</summary>
+    public bool Sinks(string item) => ClogHandling.TryGetValue(item, out var h) && h is SinkHandling or OverflowChain.Merge;
     public int PipeTier { get; set; }
     /// <summary>Items this factory imports instead of making them (delivered like a raw resource from a site elsewhere):
     /// plastic and rubber by default — they're usually made at a stand-alone oil site, and making a little here drags

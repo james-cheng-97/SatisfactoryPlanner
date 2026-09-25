@@ -43,6 +43,12 @@ public class RecipeDef
     public int NoMamTier { get; init; }
     public double? MinPower { get; init; }
     public double? MaxPower { get; init; }
+    /// <summary>Processes / burns the overflow of this item (see OverflowChain); null for a normal recipe.</summary>
+    public string? OverflowOf { get; init; }
+    /// <summary>A generator: MW it makes (its recipe has no products).</summary>
+    public double PowerOut { get; init; }
+    /// <summary>The game recipe (an overflow step's class carries a "|item" suffix; a generator has none).</summary>
+    public string? GameClass => ClassName.StartsWith(OverflowChain.BurnPrefix) ? null : ClassName.Split('|')[0];
 
     public double PerMin(double amount) => amount * 60.0 / Duration;
 
@@ -233,6 +239,14 @@ public static class GameData
         return best == int.MaxValue ? (0, false, false, 0) : (best, bestMam, false, bestNoMam);
     }
 
-    public static ItemDef Item(string cls) =>
-        Items.TryGetValue(cls, out var i) ? i : new ItemDef { ClassName = cls, Name = cls };
+    public static ItemDef Item(string cls)
+    {
+        if (Items.TryGetValue(cls, out var i)) return i;
+        // an overflow item (see OverflowChain): its item's data, named as an overflow
+        if (cls != BaseItem(cls) && Items.TryGetValue(BaseItem(cls), out var b))
+            return new ItemDef { ClassName = cls, Name = Loc.T("item.overflow", b.Name), EnglishName = b.EnglishName, IsFluid = b.IsFluid };
+        return new ItemDef { ClassName = cls, Name = cls };
+    }
+    /// <summary>The game item behind an overflow item ("Desc_Plastic_C@ovf" → "Desc_Plastic_C").</summary>
+    public static string BaseItem(string cls) { int at = cls.IndexOf('@'); return at > 0 ? cls[..at] : cls; }
 }

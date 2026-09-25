@@ -111,7 +111,7 @@ public class Plan
     public static Plan Build(Settings s)
     {
         bool drained = s.Mode == RoundingMode.Drained;
-        var sol = drained ? DrainedSolve(s) : s.Optimize ? Optimizer.Solve(s) : Solver.Solve(s);
+        var sol = drained ? DrainedSolve(s) : Solve(s, null, null);
         var plan = new Plan { Warnings = sol.Warnings, Splits = sol.Splits };
         bool fullClock = s.Mode is RoundingMode.SteadyRate or RoundingMode.Drained; // every machine & extractor at 100%
 
@@ -151,7 +151,8 @@ public class Plan
             int count = (int)Math.Ceiling(flow - 1e-9);
             double clock = fullClock ? 100 : flow / count * 100;
             var item = sol.Owner[r];
-            var bPower = r.MinPower is { } mn && r.MaxPower is { } mx ? (mn + mx) / 2
+            var bPower = r.PowerOut > 0 ? -r.PowerOut
+                : r.MinPower is { } mn && r.MaxPower is { } mx ? (mn + mx) / 2
                 : GameData.Buildings.TryGetValue(r.Building, out var b) ? b.Power : 0;
             var power = count * bPower * Math.Pow(clock / 100, PowerExp);
             plan.Power += power;
@@ -252,7 +253,7 @@ public class Plan
             {
                 // in Drained mode an intermediate that machines also consume is just unused capacity (it backs up), not waste
                 bool headroom = drained && sol.Machines.Keys.Any(r => r.In.Any(a => a.Item == item));
-                plan.Outputs.Add(new FlowRow { Item = item, Rate = (net - demand) * scale, IsSurplus = !headroom, Kind = Loc.T(headroom ? "out.headroom" : "out.byproduct") });
+                plan.Outputs.Add(new FlowRow { Item = item, Rate = (net - demand) * scale, IsSurplus = !headroom, Kind = Loc.T(headroom ? "out.headroom" : s.Sinks(item) ? "out.sink" : "out.byproduct") });
             }
         }
         plan.BeltNote = (item, rate) =>
@@ -263,7 +264,7 @@ public class Plan
         };
         if (!drained) plan.AddLineRows(s);
         plan.CountLogistics(s, sol);
-        plan.Guards = ClogGuards.Find(plan, sol);
+        plan.Guards = ClogGuards.Find(plan, sol, s);
         foreach (var g in plan.Guards.Where(g => !g.AllAway))
         {
             if (g.Fluid) { plan.AddTotal(ClogGuards.Valve, g.Lines, 0, false, true); plan.AddTotal(ClogGuards.Junction, g.Lines, 0, false, true); }
@@ -271,7 +272,8 @@ public class Plan
             else if (!plan.Splits.Any(p => p.Item == g.Item && p.Kind == SplitKind.Smart && p.Overflow?.Any(k => k.StartsWith("S:")) == true))
                 plan.AddTotal(ClogGuards.Smart, g.Lines, 0, false, true);
         }
-        int required = plan.Guards.Count(g => g.Level == GuardLevel.Required);
+        // (a surplus that goes into a sink or is processed is dealt with: no warning)
+        int required = plan.Guards.Count(g => g.Level == GuardLevel.Required && (g.Choice == null || g.Choice.Key == "" ));
         if (required > 0) plan.Warnings.Add(Loc.T("warn.clog", required));
         plan.Totals = plan.Totals.OrderBy(t => t.IsExtractor ? 0 : t.IsLogistics ? 2 : 1).ThenByDescending(t => t.Count).ToList();
         plan.BuildGraph(sol, scale, s);
@@ -285,6 +287,15 @@ public class Plan
     /// need (greedy consumers keep what reaches them). That extra supply becomes demand on the item, flows upstream, and
     /// the whole thing repeats until stable. Machines then run at 100% (rounded up).
     /// </summary>
+    /// <summary>The usual solve, then the overflow chains on top (Clog guards → how to process); the main plan is
+    /// never changed by them.</summary>
+    static SolveResult Solve(Settings s, HashSet<RecipeDef>? only, Dictionary<string, double>? extra)
+    {
+        var sol = s.Optimize ? Optimizer.Solve(s, only, extra) : Solver.Solve(s, extra);
+        OverflowChain.Apply(sol, s, extra);
+        return sol;
+    }
+
     static SolveResult DrainedSolve(Settings s)
     {
         var extra = new Dictionary<string, double>();
@@ -301,8 +312,8 @@ public class Plan
         {
             // time budget: huge plans stop refining rather than freezing the window
             if (clock.ElapsedMilliseconds > 1500) { timedOut = true; break; }
-            sol = s.Optimize ? Optimizer.Solve(s, recipes, extra) : Solver.Solve(s, extra);
-            if (s.Optimize) recipes ??= sol.Machines.Keys.ToHashSet();
+            sol = Solve(s, recipes, extra);
+            if (s.Optimize) recipes ??= sol.Machines.Keys.Where(r => r.OverflowOf == null).ToHashSet();
 
             var consumers = new Dictionary<string, List<SplitConsumer>>();
             void Add(string item, SplitConsumer c)
@@ -315,7 +326,7 @@ public class Plan
             {
                 var whole = Whole(r, x);
                 var label = GameData.Item(sol.Owner[r]).Name;
-                foreach (var a in r.In) Add(a.Item, new SplitConsumer("R:" + r.ClassName, label, x * r.PerMin(a.Value), whole * r.PerMin(a.Value), (int)whole));
+                foreach (var a in r.In) Add(a.Item, new SplitConsumer("R:" + r.ClassName, label, x * r.PerMin(a.Value), r.OverflowOf != null && a.Item == r.OverflowOf ? double.PositiveInfinity : whole * r.PerMin(a.Value), (int)whole));
             }
             foreach (var (item, d) in sol.Demand) // every drained output, even one no machine uses (it may need several belts)
                 Add(item, new SplitConsumer("T:" + item, Loc.T("node.target"), d, double.PositiveInfinity));
