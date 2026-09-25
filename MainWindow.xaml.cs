@@ -677,27 +677,47 @@ public partial class MainWindow : Window
         if (_layout == null) return;
         var settings = System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(_settings))!;
         if (settings.BlueprintTile <= 0) { MessageBox.Show(this, Loc.T("bp.needTile"), Loc.T("btn.exportBp")); return; }
-        // Node.js first: without it nothing can be written
+        // Node.js first: without it nothing can be written — the full build carries its own (bp\node\node.exe), the
+        // standard one uses an installed Node.js
         // (off the UI thread: node's first start can take seconds, e.g. while it's being virus-scanned)
+        string bundledBp = Path.Combine(AppContext.BaseDirectory, "bp");
+        string bundledNode = Path.Combine(bundledBp, "node", "node.exe");
+        string node = File.Exists(bundledNode) ? bundledNode : "node";
         ExportTitle.Text = Loc.T("bp.checkNode"); ExportCount.Text = ""; ExportBar.IsIndeterminate = true; ExportBusy.Visibility = Visibility.Visible;
-        string? nodeVersion = await System.Threading.Tasks.Task.Run(() =>
-        {
-            try
-            {
-                using var pv = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("node", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true });
-                if (pv == null) return null;
-                var v = pv.StandardOutput.ReadToEnd().Trim(); pv.WaitForExit(10000); return v;
-            }
-            catch { return null; }
-        });
+        string? nodeVersion = await System.Threading.Tasks.Task.Run(() => RunTool(node, "--version", null).output);
         ExportBusy.Visibility = Visibility.Collapsed;
-        if (string.IsNullOrEmpty(nodeVersion))
+        if (string.IsNullOrWhiteSpace(nodeVersion))
         {
             if (MessageBox.Show(this, Loc.T("bp.noNode"), Loc.T("btn.exportBp"), MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://nodejs.org/") { UseShellExecute = true }); } catch { }
             return;
         }
-        string writer = Path.Combine(AppContext.BaseDirectory, "bp", "write.js"), templates = Path.Combine(AppContext.BaseDirectory, "bp", "templates.json");
+        // the writer: bundled with its library (full build), else a copy in the app's data folder whose library npm
+        // installs once (standard build: needs npm and the network the first time)
+        string bpDir = bundledBp;
+        if (!Directory.Exists(Path.Combine(bundledBp, "node_modules", "@etothepii", "satisfactory-file-parser")))
+        {
+            bpDir = Path.Combine(GameData.AppDir, "bp");
+            try
+            {
+                Directory.CreateDirectory(bpDir);
+                foreach (var f in new[] { "write.js", "templates.json", "package.json", "package-lock.json" })
+                    if (File.Exists(Path.Combine(bundledBp, f))) File.Copy(Path.Combine(bundledBp, f), Path.Combine(bpDir, f), overwrite: true);
+            }
+            catch (Exception ex) { MessageBox.Show(this, Loc.T("error", ex.Message), Loc.T("btn.exportBp")); return; }
+            if (!Directory.Exists(Path.Combine(bpDir, "node_modules", "@etothepii", "satisfactory-file-parser")))
+            {
+                ExportTitle.Text = Loc.T("bp.installing"); ExportCount.Text = ""; ExportBar.IsIndeterminate = true; ExportBusy.Visibility = Visibility.Visible;
+                var npm = await System.Threading.Tasks.Task.Run(() => RunTool("cmd.exe", "/c npm ci --no-audit --no-fund", bpDir, 300000));
+                ExportBusy.Visibility = Visibility.Collapsed;
+                if (!Directory.Exists(Path.Combine(bpDir, "node_modules", "@etothepii", "satisfactory-file-parser")))
+                {
+                    MessageBox.Show(this, Loc.T("bp.installFailed", bpDir) + "\n\n" + (npm.error.Length > 600 ? npm.error[^600..] : npm.error), Loc.T("btn.exportBp"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+            }
+        }
+        string writer = Path.Combine(bpDir, "write.js"), templates = Path.Combine(bpDir, "templates.json");
         if (!File.Exists(writer) || !File.Exists(templates)) { MessageBox.Show(this, Loc.T("bp.noWriter", writer), Loc.T("btn.exportBp")); return; }
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FactoryGame", "Saved", "SaveGames", "blueprints");
         var dlg = new Microsoft.Win32.OpenFolderDialog { Title = Loc.T("bp.pickFolder") };
@@ -740,7 +760,7 @@ public partial class MainWindow : Window
                     {
                         var specPath = Path.Combine(tmp.FullName, $"spec{ok + errs.Count}.json");
                         File.WriteAllText(specPath, BlueprintExport.ToJson(spec));
-                        var psi = new System.Diagnostics.ProcessStartInfo("node") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetDirectoryName(writer)! };
+                        var psi = new System.Diagnostics.ProcessStartInfo(node) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetDirectoryName(writer)! };
                         foreach (var a in new[] { writer, specPath, templates, dir }) psi.ArgumentList.Add(a);
                         using var p = System.Diagnostics.Process.Start(psi)!;
                         var outTask = p.StandardOutput.ReadToEndAsync(); var errText = p.StandardError.ReadToEnd();
@@ -767,6 +787,23 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { StatusText.Text = Loc.T("error", ex.Message); }
         finally { ExportBpButton.IsEnabled = true; ExportBusy.Visibility = Visibility.Collapsed; }
+    }
+
+    /// <summary>Runs a tool (hidden window), returning its output and error text ("" if it can't start).</summary>
+    static (string output, string error) RunTool(string exe, string args, string? dir, int timeoutMs = 20000)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo(exe, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            if (dir != null) psi.WorkingDirectory = dir;
+            using var p = System.Diagnostics.Process.Start(psi);
+            if (p == null) return ("", "");
+            var err = p.StandardError.ReadToEndAsync();
+            var outp = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(timeoutMs);
+            return (outp.Trim(), err.Result.Trim());
+        }
+        catch (Exception ex) { return ("", ex.Message); }
     }
 
     /// <summary>Ctrl + mouse wheel zooms the tree diagram.</summary>

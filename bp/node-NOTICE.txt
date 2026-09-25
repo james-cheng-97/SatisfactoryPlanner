@@ -1,0 +1,6 @@
+This folder holds node.exe, the Node.js runtime, copied from a Node.js installation so the
+planner can write blueprints without Node.js installed.
+
+Node.js is (c) OpenJS Foundation and Node.js contributors, released under the MIT licence.
+Full licence text (including bundled third-party components):
+https://github.com/nodejs/node/blob/main/LICENSE

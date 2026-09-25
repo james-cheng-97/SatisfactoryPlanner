@@ -22,11 +22,27 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+  <!-- Build flavours (dotnet publish -c Release [-p:Flavor=Full]):
+       Standard (default): the app + the blueprint writer script and templates. Game data comes from the wiki on first
+         start; the writer's library is installed with npm on the first blueprint export (needs Node.js + network).
+       Full: everything bundled for offline use — game data / icons / names (Data/), the writer's library and a
+         portable node.exe (from NodeDir, default the build machine's Node.js install). No network, no Node.js needed. -->
+  <PropertyGroup>
+    <Flavor Condition="'$(Flavor)' == ''">Standard</Flavor>
+    <NodeDir Condition="'$(NodeDir)' == ''">$(ProgramFiles)\nodejs</NodeDir>
+  </PropertyGroup>
+
   <ItemGroup>
+    <!-- the blueprint writer: always -->
+    <None Update="bp\write.js;bp\templates.json;bp\package.json;bp\package-lock.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Flavor)' == 'Full'">
     <None Update="Data\**\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Data\images\*.png" CopyToOutputDirectory="PreserveNewest" />
-    <!-- the blueprint writer (Node.js + satisfactory-file-parser): Export blueprints runs it -->
-    <None Include="bp\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="bp\node_modules\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(NodeDir)\node.exe" Link="bp\node\node.exe" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(NodeDir)\LICENSE" Link="bp\node\LICENSE" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NodeDir)\LICENSE')" />
+    <None Update="bp\node-NOTICE.txt" Link="bp\node\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- a fresh clone has no bp/node_modules (not in Git): restore the blueprint writer's library with npm. Without

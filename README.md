@@ -21,11 +21,18 @@ blueprint writer).
 
 ```
 dotnet build -c Release          # restores bp/node_modules with `npm ci` if it's missing
-dotnet publish -c Release -o publish
+.\build.ps1                      # both release flavours into release\
 ```
 
-`publish/SatisfactoryPlanner.exe` is a single self-contained file (the blueprint writer is bundled inside it; exporting
-blueprints needs Node.js installed on the machine that runs it).
+Two release flavours, both a single self-contained `.exe`:
+
+| Flavour | Size | Game data | Blueprint export |
+|---|---|---|---|
+| `release\standard\SatisfactoryPlanner.exe` | ~62 MB | downloaded from the wiki on first start | needs Node.js; installs the writer's library with npm on the first export |
+| `release\full\SatisfactoryPlanner-full.exe` | ~100 MB | built in | built in, including a portable `node.exe` (no Node.js, no network) |
+
+`dotnet publish -c Release [-p:Flavor=Full] -o <dir>` builds one flavour. The full one bundles `Data\` (see below) and
+`node.exe` from the build machine's Node.js install (`-p:NodeDir=...` to pick another).
 
 ### Game data
 

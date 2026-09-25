@@ -154,7 +154,7 @@ The writer ships inside the exe: `bp/` (write.js, templates.json, node_modules o
 of the single-file publish and self-extracts with the app (`AppContext.BaseDirectoryp`). "Export blueprints…" checks
 for Node.js (warns + offers nodejs.org), asks for a folder (default SaveGameslueprints), takes the session header from
 a game-made .sbp there (or a folder above), writes "<tab> rRcC.sbp" per tile and "<tab> wiring.txt" (joints + warnings).
-Keep `bp/` in the repo in step with the scratchpad writer.
+Keep `bp/` in the repo in step with the scratchpad writer. Build flavours (build.ps1): standard (no Data, no node_modules: wiki data on first start, npm ci into %LOCALAPPDATA%/SatisfactoryPlanner/bp on first export) and full (-p:Flavor=Full: Data, node_modules and a portable node.exe from NodeDir, bp/node/node.exe preferred at run time).
 
 ### 2.11 In-game test saves (scratchpad `bp/`)
 `inject.js` puts a factory's tile blueprints (write.js objects, `DUMP_OBJECTS=1`) into a copy of a save, 50 m east / 100 m
