@@ -145,8 +145,12 @@ public partial class Layout
     public const double LevelH = 2;
     /// <summary>Scales every time limit of the planner: 2 = a layout may take up to about two minutes (big factories with
     /// stacked levels need it). PNR_TIMEX overrides it (tests).</summary>
-    static readonly double TimeX = double.TryParse(Environment.GetEnvironmentVariable("PNR_TIMEX"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var tx) ? tx : 2;
+    static readonly double? EnvTimeX = double.TryParse(Environment.GetEnvironmentVariable("PNR_TIMEX"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var tx) ? tx : null;
+    static double _timeX = 2; // set from Settings.LayoutSeconds at the start of each build (1 = about a minute)
+    static double TimeX => EnvTimeX ?? _timeX;
     internal static double TimeScale => TimeX;
+    /// <summary>Sets the planner's time limit (Settings.LayoutSeconds; PNR_TIMEX still wins, for tests).</summary>
+    public static void SetTimeLimit(int seconds) => _timeX = Math.Clamp(seconds, 20, 1800) / 60.0;
 
     /// <summary>
     /// Several floors: machines taller than 15 m stay on the ground floor and the floors above leave them open to the sky;
@@ -602,7 +606,7 @@ public partial class Layout
                 continue;
             }
             var failed = new List<Lane>();
-            Layout.Say("status.route", attempt + 1);
+            Layout.Say(attempt == 0 ? "status.route" : "status.reroute");
             var tRoute = System.Diagnostics.Stopwatch.StartNew();
             double predOver = RudyLog ? RudyOf(cells, nets) : 0;
             var L = Route(cells, nets, s, tile, plan, failed);

@@ -55,7 +55,13 @@ public partial class Layout
 
     /// <summary>Progress for the UI while a layout is built (the step it's on); set per build thread.</summary>
     [ThreadStatic] public static Action<string>? Status;
-    internal static void Say(string key, params object[] args) => Status?.Invoke(Loc.T(key, args));
+    // the floor being built stays in front of every step on it ("Floor 2 of 3 · …"); reset per build
+    [ThreadStatic] static string? _floor;
+    internal static void Say(string key, params object[] args)
+    {
+        if (key == "status.floor") { _floor = Loc.T("status.floorOf", args); Status?.Invoke(_floor + " · " + Loc.T("status.route")); return; }
+        Status?.Invoke(_floor == null ? Loc.T(key, args) : _floor + " · " + Loc.T(key, args));
+    }
 
     /// <summary>
     /// Congested corridors in a routed layout: ground-level belts of different lines running parallel within 4.5 m of
@@ -244,6 +250,7 @@ public partial class Layout
     /// <summary>Try several row lengths and row widths; keep the most square factory (ties: shortest belts).</summary>
     public static Layout Build(Plan plan, Settings s)
     {
+        _floor = null; SetTimeLimit(s.LayoutSeconds);
         var L = BuildLayout(SurplusIntoOutputs(plan), s);
         // machines across a blueprint tile border, when allowed: marked for placing by hand, with a power hint
         if (s.BlueprintTile > 0 && s.HandPlaceAcrossTiles)

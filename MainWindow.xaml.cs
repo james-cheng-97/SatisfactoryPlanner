@@ -104,6 +104,8 @@ public partial class MainWindow : Window
         HandCheck.IsChecked = _settings.HandPlaceAcrossTiles;
         HandCheck.IsEnabled = _settings.BlueprintTile > 0;
         TankCheck.IsChecked = _settings.IndustrialFluidBox;
+        TimeLimitSlider.Value = _settings.LayoutSeconds;
+        TimeLimitText.Text = FormatTime(_settings.LayoutSeconds);
         MinerCombo.SelectedValue = _settings.Miner;
         ClockSlider.Value = _settings.ExtractorClock;
         ModeExact.IsChecked = _settings.Mode == RoundingMode.Exact;
@@ -485,7 +487,17 @@ public partial class MainWindow : Window
         // the step the planner is on (from its thread) and the time so far, so a long layout doesn't look stuck
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var tick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        tick.Tick += (_, _) => { if (run == _layoutRun) LayoutElapsed.Text = Loc.T("status.elapsed", (int)watch.Elapsed.TotalSeconds); };
+        double limit = Math.Clamp(settings.LayoutSeconds, 20, 1800);
+        void Tick()
+        {
+            if (run != _layoutRun) return;
+            double left = limit - watch.Elapsed.TotalSeconds;
+            DrawRing(left / limit);
+            LayoutLeft.Text = left > 0 ? FormatTime(left) : "…";
+            LayoutElapsed.Text = left > 0 ? Loc.T("layout.left", FormatTime(left), FormatTime(limit)) : Loc.T("layout.overtime");
+        }
+        tick.Tick += (_, _) => Tick();
+        Tick();
         tick.Start();
         void Step(string text) => Dispatcher.BeginInvoke(() => { if (run == _layoutRun) LayoutStep.Text = text; });
         try
@@ -612,6 +624,29 @@ public partial class MainWindow : Window
         HandCheck.IsEnabled = _settings.BlueprintTile > 0;
         _layoutDirty = true;
         if (MainTabs.SelectedItem == LayoutTab) RenderLayout();
+    }
+
+    void TimeLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (TimeLimitText == null) return;
+        TimeLimitText.Text = FormatTime(TimeLimitSlider.Value);
+        if (_loading || _settings == null) return;
+        _settings.LayoutSeconds = (int)TimeLimitSlider.Value; // (applies to the next layout; a cached one is still shown)
+    }
+
+    static string FormatTime(double sec) { int t = (int)Math.Max(0, Math.Round(sec)); return $"{t / 60}:{t % 60:00}"; }
+
+    /// <summary>The countdown ring: an arc from the top, clockwise, for the part of the time still left.</summary>
+    void DrawRing(double left)
+    {
+        double f = Math.Clamp(left, 0, 1), r = 44, cx = 48, cy = 48;
+        if (f >= 0.9999) { LayoutRing.Data = new System.Windows.Media.EllipseGeometry(new Point(cx, cy), r, r); return; }
+        if (f <= 0) { LayoutRing.Data = null; return; }
+        double a = f * 2 * Math.PI;
+        var end = new Point(cx + r * Math.Sin(a), cy - r * Math.Cos(a));
+        var fig = new System.Windows.Media.PathFigure { StartPoint = new Point(cx, cy - r) };
+        fig.Segments.Add(new System.Windows.Media.ArcSegment(end, new Size(r, r), 0, f > 0.5, System.Windows.Media.SweepDirection.Clockwise, true));
+        LayoutRing.Data = new System.Windows.Media.PathGeometry([fig]);
     }
 
     void TankCheck_Click(object sender, RoutedEventArgs e)
@@ -985,7 +1020,12 @@ public partial class MainWindow : Window
             if (File.Exists(SettingsPath))
                 _settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath)) ?? new();
         }
-        catch (Exception) { _settings = new(); }
+        catch (Exception)
+        {
+            // unreadable (e.g. caught mid-write by another copy of the app): keep it aside, never save defaults over it
+            try { File.Copy(SettingsPath, SettingsPath + $".unreadable-{DateTime.Now:yyyyMMdd-HHmmss}", true); } catch (Exception) { }
+            _settings = new();
+        }
     }
 
     void SaveSettings()
@@ -996,7 +1036,11 @@ public partial class MainWindow : Window
             _settings.Plans = _plans.ToList();
             _settings.ActivePlan = _plans.IndexOf(_active);
             Directory.CreateDirectory(GameData.AppDir);
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true }));
+            // written whole, then swapped in (a reader never sees half a file); the previous one stays as .bak
+            string tmp = SettingsPath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true }));
+            if (File.Exists(SettingsPath)) File.Replace(tmp, SettingsPath, SettingsPath + ".bak");
+            else File.Move(tmp, SettingsPath);
         }
         catch (Exception) { }
     }

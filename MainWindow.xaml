@@ -325,33 +325,64 @@
                 </TabItem>
                 <TabItem x:Name="LayoutTab" Header="{Binding [tab.layout], Source={x:Static local:Loc.Instance}}">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4">
-                            <TextBlock Text="{Binding [lbl.zoom], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Slider x:Name="LayoutZoom" Width="160" Minimum="0.05" Maximum="2" Value="0.6" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding Value, ElementName=LayoutZoom, StringFormat={}{0:P0}}" Width="45" Margin="6,0" VerticalAlignment="Center"/>
-                            <Button Content="{Binding [btn.fit], Source={x:Static local:Loc.Instance}}" Padding="10,2" Click="FitLayout_Click"/>
-                            <Button Content="{Binding [btn.exportPng], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportLayoutPng_Click"/>
-                            <Button Content="{Binding [btn.exportCsv], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportLayoutCsv_Click"/>
-                            <Button x:Name="ExportBpButton" Content="{Binding [btn.exportBp], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.exportBp], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportBlueprints_Click"/>
-                            <TextBlock Text="{Binding [lbl.floors], Source={x:Static local:Loc.Instance}}" Margin="12,0,4,0" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="FloorsCombo" Width="48" SelectionChanged="FloorsCombo_Changed">
-                                <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/>
-                            </ComboBox>
-                            <TextBlock Text="{Binding [lbl.blueprint], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="BlueprintCombo" Width="110" SelectionChanged="BlueprintCombo_Changed">
-                                <ComboBoxItem Content="{Binding [bp.off], Source={x:Static local:Loc.Instance}}"/>
-                                <ComboBoxItem Content="{Binding [bp.mk2], Source={x:Static local:Loc.Instance}}"/>
-                                <ComboBoxItem Content="{Binding [bp.mk3], Source={x:Static local:Loc.Instance}}"/>
-                            </ComboBox>
-                            <CheckBox x:Name="HandCheck" Content="{Binding [chk.byHand], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.byHand], Source={x:Static local:Loc.Instance}}" Margin="8,0,0,0" VerticalAlignment="Center" Click="HandCheck_Click"/>
-                            <CheckBox x:Name="TankCheck" Content="{Binding [chk.bigTank], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.bigTank], Source={x:Static local:Loc.Instance}}" Margin="8,0,0,0" VerticalAlignment="Center" Click="TankCheck_Click"/>
-                            <TextBlock Text="{Binding [lbl.cached], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="CacheCombo" Width="250" SelectionChanged="CacheCombo_Changed" ToolTip="{Binding [tip.cached], Source={x:Static local:Loc.Instance}}"/>
-                            <Button Content="{Binding [btn.relayout], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.relayout], Source={x:Static local:Loc.Instance}}" Padding="8,2" Margin="4,0,0,0" Click="Relayout_Click"/>
-                            <TextBlock Text="{Binding [lbl.showFloor], Source={x:Static local:Loc.Instance}}" Margin="10,0,4,0" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="FloorViewCombo" Width="70" SelectionChanged="FloorView_Changed"/>
-                            <TextBlock x:Name="LayoutInfo" Foreground="Gray" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <!-- row 1: what to build (layout options); rarely changed ones under "Advanced" -->
+                        <WrapPanel DockPanel.Dock="Top" Margin="4,4,4,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <TextBlock Text="{Binding [lbl.floors], Source={x:Static local:Loc.Instance}}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="FloorsCombo" Width="48" SelectionChanged="FloorsCombo_Changed">
+                                    <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <TextBlock Text="{Binding [lbl.blueprint], Source={x:Static local:Loc.Instance}}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="BlueprintCombo" Width="110" SelectionChanged="BlueprintCombo_Changed">
+                                    <ComboBoxItem Content="{Binding [bp.off], Source={x:Static local:Loc.Instance}}"/>
+                                    <ComboBoxItem Content="{Binding [bp.mk2], Source={x:Static local:Loc.Instance}}"/>
+                                    <ComboBoxItem Content="{Binding [bp.mk3], Source={x:Static local:Loc.Instance}}"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <ToggleButton x:Name="AdvancedToggle" Content="{Binding [btn.advanced], Source={x:Static local:Loc.Instance}}" Padding="8,2"/>
+                                <Popup x:Name="AdvancedPopup" IsOpen="{Binding IsChecked, ElementName=AdvancedToggle, Mode=TwoWay}" PlacementTarget="{Binding ElementName=AdvancedToggle}" Placement="Bottom" StaysOpen="False">
+                                    <Border Background="White" BorderBrush="#B8A999" BorderThickness="1" Padding="10" Width="360">
+                                        <StackPanel>
+                                            <CheckBox x:Name="HandCheck" Content="{Binding [chk.byHand], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.byHand], Source={x:Static local:Loc.Instance}}" Click="HandCheck_Click"/>
+                                            <CheckBox x:Name="TankCheck" Content="{Binding [chk.bigTank], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.bigTank], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="TankCheck_Click"/>
+                                            <TextBlock Text="{Binding [lbl.timeLimit], Source={x:Static local:Loc.Instance}}" FontWeight="SemiBold" Margin="0,12,0,2"/>
+                                            <DockPanel>
+                                                <TextBlock x:Name="TimeLimitText" DockPanel.Dock="Right" Width="50" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                <Slider x:Name="TimeLimitSlider" Minimum="30" Maximum="600" TickFrequency="30" IsSnapToTickEnabled="True" TickPlacement="BottomRight" ValueChanged="TimeLimit_Changed"/>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding [tip.timeLimit], Source={x:Static local:Loc.Instance}}" TextWrapping="Wrap" Foreground="#9A5A00" FontSize="11" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <TextBlock Text="{Binding [lbl.cached], Source={x:Static local:Loc.Instance}}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="CacheCombo" Width="250" SelectionChanged="CacheCombo_Changed" ToolTip="{Binding [tip.cached], Source={x:Static local:Loc.Instance}}"/>
+                                <Button Content="{Binding [btn.relayout], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.relayout], Source={x:Static local:Loc.Instance}}" Padding="8,2" Margin="4,0,0,0" Click="Relayout_Click"/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <!-- row 2: viewing and exporting -->
+                        <WrapPanel DockPanel.Dock="Top" Margin="4,0,4,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <TextBlock Text="{Binding [lbl.zoom], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Slider x:Name="LayoutZoom" Width="140" Minimum="0.05" Maximum="2" Value="0.6" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Value, ElementName=LayoutZoom, StringFormat={}{0:P0}}" Width="45" Margin="6,0" VerticalAlignment="Center"/>
+                                <Button Content="{Binding [btn.fit], Source={x:Static local:Loc.Instance}}" Padding="10,2" Click="FitLayout_Click"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <TextBlock Text="{Binding [lbl.showFloor], Source={x:Static local:Loc.Instance}}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="FloorViewCombo" Width="70" SelectionChanged="FloorView_Changed"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+                                <Button Content="{Binding [btn.exportPng], Source={x:Static local:Loc.Instance}}" Padding="10,2" Click="ExportLayoutPng_Click"/>
+                                <Button Content="{Binding [btn.exportCsv], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportLayoutCsv_Click"/>
+                                <Button x:Name="ExportBpButton" Content="{Binding [btn.exportBp], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.exportBp], Source={x:Static local:Loc.Instance}}" Padding="10,2" Margin="6,0,0,0" Click="ExportBlueprints_Click"/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <TextBlock DockPanel.Dock="Top" x:Name="LayoutInfo" Foreground="Gray" Margin="6,0,6,4" TextWrapping="Wrap"/>
                         <TextBlock DockPanel.Dock="Bottom" Text="{Binding [layout.legend], Source={x:Static local:Loc.Instance}}" Foreground="Gray" TextWrapping="Wrap" Margin="4"/>
                         <Grid>
                         <ScrollViewer x:Name="LayoutScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
@@ -365,21 +396,17 @@
                         <!-- shown while the layout is calculated in the background -->
                         <Border x:Name="LayoutBusy" Visibility="Collapsed" Background="#99101820">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Ellipse Width="48" Height="48" StrokeThickness="5" Stroke="#4FC3F7" StrokeDashArray="7 5" RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.RenderTransform><RotateTransform x:Name="LayoutSpin"/></Ellipse.RenderTransform>
-                                    <Ellipse.Triggers>
-                                        <EventTrigger RoutedEvent="Loaded">
-                                            <BeginStoryboard>
-                                                <Storyboard RepeatBehavior="Forever">
-                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" From="0" To="360" Duration="0:0:1.2"/>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </EventTrigger>
-                                    </Ellipse.Triggers>
-                                </Ellipse>
+                                <!-- time left: the ring empties as the planner's time limit runs out -->
+                                <Grid Width="96" Height="96" HorizontalAlignment="Center">
+                                    <Ellipse Stroke="#33FFFFFF" StrokeThickness="8"/>
+                                    <Path x:Name="LayoutRing" Stroke="#4FC3F7" StrokeThickness="8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <TextBlock x:Name="LayoutLeft" Foreground="White" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
                                 <TextBlock Text="{Binding [layout.busy], Source={x:Static local:Loc.Instance}}" Foreground="White" FontSize="14" Margin="0,10,0,0" HorizontalAlignment="Center"/>
                                 <TextBlock x:Name="LayoutStep" Foreground="#B0C4D0" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Center"/>
                                 <TextBlock x:Name="LayoutElapsed" Foreground="#80949F" FontSize="11" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding [layout.fallback], Source={x:Static local:Loc.Instance}}" Foreground="#80949F" FontSize="11" Margin="0,12,0,0"
+                                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"/>
                             </StackPanel>
                         </Border>
                         <!-- blueprint export: how many are written so far -->

@@ -46,6 +46,8 @@ public class Settings
     /// <summary>Fluid input / output boxes: the Industrial Fluid Buffer (2400 m³, 12 m across) instead of the Fluid
     /// Buffer (400 m³, 4 m). Bigger layouts (plastic 4 -> 7 blueprints when measured).</summary>
     public bool IndustrialFluidBox { get; set; }
+    /// <summary>How long the place &amp; route planner may search (s). Short limits make big plans fall back to the row layout.</summary>
+    public int LayoutSeconds { get; set; } = 120;
     public int PipeTier { get; set; }
     /// <summary>Items this factory imports instead of making them (delivered like a raw resource from a site elsewhere):
     /// plastic and rubber by default — they're usually made at a stand-alone oil site, and making a little here drags
