@@ -57,6 +57,7 @@ public static class Columns
         foreach (double k in new[] { 0.6, 0.75, 0.9, 1.0, 1.15, 1.3, 1.5, 1.8, 2.1, 2.5, 3.0 })
         {
             if (mask >= 0 && s.Floors < 2) break;
+            if (Environment.GetEnvironmentVariable("COLS_K") is { } ck && Math.Abs(double.Parse(ck, System.Globalization.CultureInfo.InvariantCulture) - k) > 0.01) continue;
             if (Environment.GetEnvironmentVariable("COLS_MODE") is { } cm && (cm == "branch") != (mask >= 0)) continue;
             var l = new List<string>();
             bool tooMany = false;
@@ -151,12 +152,15 @@ public static class Columns
                 int fl = groupFloor[run[0]];
                 capH = Math.Max(maxLen, Math.Sqrt(groups.Where(g => groupFloor[g] == fl).Sum(Len) * ColumnPitch) * capScale);
             }
+            // tall machines (refineries) all in one column when the belts allow, like the player's 10 refineries: a second
+            // tall column leaves a second open band upstairs (the other columns keep the swept height)
+            double runCap = floors > 1 && run.All(IsTall) ? Math.Max(capH, run.Sum(Len)) : capH;
             var cur = new List<Group>();
             foreach (var g in run.OrderBy(g => g.Depth).ThenByDescending(Len))
             {
                 var trial = cur.Append(g).ToList();
                 if (cur.Count > 0 && (Belts(trial, true) > Heights(Pipes(trial, true)).Length || Belts(trial, false) > Heights(Pipes(trial, false)).Length
-                                      || trial.Sum(Len) > capH + 0.1))
+                                      || trial.Sum(Len) > runCap + 0.1))
                 {
                     packed.Add((cur.Min(v => v.Depth), cur));
                     cur = new List<Group>();
@@ -276,6 +280,25 @@ public static class Columns
                                                && trackX.Keys.Where(k => k.item == it && !k.collect).All(k => cols[k.col].Floor == 0)).ToHashSet();
         double yBase = southInputs.Count > 0 ? 4 : 0; // (room for their belts to start south of the machines)
 
+        // in-column hand-over (the player's ingot → sheet, stator → motor): an item made by groups of one column and used
+        // only by groups placed after them in that column crosses the gap between them (8 m up) from the output side to
+        // the input side — no header row. The gap before the first consumer is 2 m wider for it.
+        var boxSet = nodes.Values.Where(n => n.Kind is NodeKind.Target or NodeKind.Surplus).Select(n => n.Item.Split('#')[0]).ToHashSet();
+        var handover = new Dictionary<string, (int col, List<Group> prod, List<Group> cons)>();
+        foreach (var c in cols)
+            foreach (var (item, fluid) in c.Outs)
+            {
+                if (fluid || inputSet.Contains(item) || boxSet.Contains(item)) continue;
+                var prod = c.Groups.Where(g => g.Node.Recipe!.Out.Any(a => a.Item == item)).ToList();
+                if (cols.Any(o => o != c && o.Outs.Any(x => x.item == item))) continue;
+                var consKeys = plan.Edges.Where(e => e.Item == item && c.Groups.Any(g => g.Node.Key == e.From)).Select(e => e.To).Distinct().ToList();
+                var cons = c.Groups.Where(g => consKeys.Contains(g.Node.Key)).ToList();
+                if (cons.Count == 0 || cons.Count != consKeys.Count) continue; // (used outside this column too)
+                if (prod.Max(g => c.Groups.IndexOf(g)) >= cons.Min(g => c.Groups.IndexOf(g))) continue;
+                handover[item] = (c.Index, prod, cons);
+            }
+        var widerGap = handover.Values.Select(h => h.cons.OrderBy(g => cols[h.col].Groups.IndexOf(g)).First()).ToHashSet();
+
         // ---- place the machines (y up from yBase), groups stacked in their column
         double colTop = 0;
         foreach (var c in cols)
@@ -283,6 +306,7 @@ public static class Columns
             double y = yBase;
             foreach (var g in c.Groups)
             {
+                if (widerGap.Contains(g)) y += 2;
                 for (int m = 0; m < g.Node.Machines; m++)
                 {
                     // (flush with the column's west face: every input lift stands 1 m clear of it)
@@ -360,7 +384,7 @@ public static class Columns
         var taps = new Dictionary<string, List<(int f, double x)>>();
         foreach (var ((ci, item, collect), (tx, _)) in trackX)
             (collect ? sources : taps).TryAdd(item, new());
-        foreach (var ((ci, item, collect), (tx, _)) in trackX) (collect ? sources : taps)[item].Add((cols[ci].Floor, tx));
+        foreach (var ((ci, item, collect), (tx, _)) in trackX) if (!handover.ContainsKey(item)) (collect ? sources : taps)[item].Add((cols[ci].Floor, tx));
         foreach (var it in items)
         {
             if (inputItems.Contains(it.item) && !southInputs.Contains(it.item)) (sources.TryGetValue(it.item, out var l) ? l : sources[it.item] = new()).Add((0, inputBankX + 2));
@@ -402,6 +426,23 @@ public static class Columns
         // ---- tracks: collect tracks run north from their first machine to their row; distribute tracks south from theirs
         foreach (var ((ci, item, collect), (tx, tz)) in trackX)
         {
+            if (handover.TryGetValue(item, out var ho))
+            {
+                // up the output side to the gap, over to the input side 8 m up, then up the input side into the consumers
+                if (!collect) continue;
+                int hf = cols[ho.col].Floor;
+                var (dx, dz) = trackX[(ho.col, item, false)];
+                double gapY = (ho.prod.SelectMany(g => g.Machines).Max(m => m.Y + m.H) + ho.cons.SelectMany(g => g.Machines).Min(m => m.Y)) / 2;
+                var outYs = L.Belts.Where(b => b.Floor == hf && b.Item == item && b.X2 == tx && b.Y1 == b.Y2 && Math.Abs(b.Z1 - tz) < 0.01).Select(b => b.Y1).ToList();
+                var inYs = L.Belts.Where(b => b.Floor == hf && b.Item == item && b.X1 == dx && b.Y1 == b.Y2 && Math.Abs(b.Z1 - dz) < 0.01).Select(b => b.Y1).ToList();
+                if (outYs.Count == 0 || inYs.Count == 0) continue;
+                Seg(hf, tx, outYs.Min(), tz, tx, gapY, tz, item, false);
+                if (tz != HeaderZ) Lift(hf, tx, gapY, tz, HeaderZ, item, false);
+                Seg(hf, tx, gapY, HeaderZ, dx, gapY, HeaderZ, item, false);
+                if (dz != HeaderZ) Lift(hf, dx, gapY, HeaderZ, dz, item, false);
+                Seg(hf, dx, gapY, dz, dx, inYs.Max(), dz, item, false);
+                continue;
+            }
             if (!collect && southInputs.Contains(item))
             {
                 // an input from the south: its belt / pipe starts below the machines and runs up the track

@@ -221,8 +221,11 @@ split of the branches over the floors is laid out for real (weights alone miss t
 tall machines); tall machines, pipe users, the root and anything shared by several branches stay on the ground. Picks
 the player's arrangement on the motor plan (stator branch down, steel / rods / screws / rotors up). Tried next to the
 column-based split; the smaller wins. Track pitch 2 m; lift → track 2 m (1.5 m: lifts overlap splitters).
+**Tall machines in one column** (their own height cap; a shared cap split the 10 refineries in two and left two open
+bands upstairs). **In-column hand-over**: an item made by groups of one column and used only by groups placed after
+them in that column crosses the 4 m gap between them 8 m up (output side → input side), no header row.
 Status (2026-09-26, lab notes artifact "Columns Engine Lab Notes"): the player's exact motor plan (41 machines), 2 floors:
-160 × 104 m = 2.07× their 70 × 115 m (1.56× their 93 × 115 m with the water extractors), 0 export warnings; the old
+120 × 136 m = 2.03× their 70 × 115 m (1.53× their 93 × 115 m with the water extractors), 0 export warnings; the old
 designer 3.67×. Remaining gap: 5 ground columns (80 m of machine depth) vs their 3 (40 m) — items made and used in one
 column (ingot → sheet, stator → motor) cost a collect + distribute track and a header row; they hand over in-column. Test: `QUICK=16 SCOPE=player FLOORS=2`. Next: U-turn corridors (merger chain → splitter chain
 of the next column), header only for items that skip columns, side chains upstairs above their consumer.
