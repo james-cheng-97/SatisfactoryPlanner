@@ -1076,10 +1076,11 @@ public partial class MainWindow : Window
         IProgress<(int, int)> report = progress;
         try
         {
+            var ins = new List<string>(); // where each input starts (no box: the player brings it)
             var (written, errors, warnings, joints) = await System.Threading.Tasks.Task.Run(() =>
             {
                 var warn = new List<string>(); var jts = new List<BlueprintExport.Joint>();
-                var specs = BlueprintExport.FromLayout(layout, settings, name, settings.BlueprintTile, baseBp[..^4], warn, jts);
+                var specs = BlueprintExport.FromLayout(layout, settings, name, settings.BlueprintTile, baseBp[..^4], warn, jts, ins);
                 var tmp = Directory.CreateTempSubdirectory("sfplanner-bp");
                 int ok = 0; var errs = new List<string>();
                 report.Report((0, specs.Count));
@@ -1108,6 +1109,7 @@ public partial class MainWindow : Window
             int k = 0;
             foreach (var j in joints.OrderBy(j => j.z).ThenBy(j => -j.y).ThenBy(j => j.x))
                 sb.AppendLine($"{++k,3}. {(j.item.Contains("Pipeline") ? "pipe" : "belt")} {j.tileA} -> {j.tileB}  ({j.x * Layout.Foundation:0} m, {j.y * Layout.Foundation:0} m, {j.z / 100:0} m)");
+            if (ins.Count > 0) { sb.AppendLine(); sb.AppendLine(Loc.T("bp.inputsHead")); foreach (var i in ins.Distinct()) sb.AppendLine("  " + i); sb.AppendLine(); }
             foreach (var w in warnings) sb.AppendLine("! " + w);
             File.WriteAllText(Path.Combine(dir, $"{name} wiring.txt"), sb.ToString(), new System.Text.UTF8Encoding(true));
             StatusText.Text = Loc.T("bp.done", written, dir);

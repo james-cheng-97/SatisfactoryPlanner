@@ -269,6 +269,9 @@ public class Plan
         if (!drained) plan.AddLineRows(s);
         plan.CountLogistics(s, sol);
         plan.Guards = ClogGuards.Find(plan, sol, s);
+        foreach (var (item, r) in s.SkippedPins())
+            plan.Warnings.Insert(0, Loc.T("warn.pinSkipped", (r.Alternate ? Loc.T("alt") : "") + r.Name, GameData.Item(item).Name,
+                string.Join(", ", r.In.Where(a => !s.Reachable().Contains(a.Item)).Select(a => GameData.Item(a.Item).Name))));
         foreach (var g in plan.Guards.Where(g => !g.AllAway))
         {
             if (g.Fluid) { plan.AddTotal(ClogGuards.Valve, g.Lines, 0, false, true); plan.AddTotal(ClogGuards.Junction, g.Lines, 0, false, true); }

@@ -160,6 +160,8 @@ public partial class Layout
         "Desc_StorageContainerMk2_C" => (5, 10), // Industrial Storage Container
         "Desc_PipeStorageTank_C" => (4, 4),      // Fluid Buffer
         "Desc_IndustrialTank_C" => (12, 12),     // Industrial Fluid Buffer (its connections 6 m out either side, measured in a save)
+        InputStub => (5, 10), // (the room a box took: smaller cells made placement worse — RIP 1 -> 2 blueprints)
+        InputStubPipe => (4, 4),
         "Desc_ResourceSink_C" => (16, 13),       // AWESOME Sink (wiki; its one input 5 m out from the centre, measured in a save)
         "Desc_GeneratorFuel_C" => (20, 20),      // Fuel-Powered Generator (wiki; pipe input 8.6 m out, measured in a save)
         "Desc_GeneratorCoal_C" => (10, 26),      // Coal-Powered Generator (wiki; belt + water 11 m out, measured in a save)
@@ -167,6 +169,9 @@ public partial class Layout
     };
 
     public const string SinkBox = "Desc_ResourceSink_C";
+    /// <summary>An input: no box, just where its belt / pipe starts at the edge (the player brings the supply to it).</summary>
+    public const string InputStub = "InputStub", InputStubPipe = "InputStubPipe";
+    public static bool IsInputStub(string b) => b is InputStub or InputStubPipe;
     /// <summary>Building height in metres (satisfactory.wiki.gg infoboxes).</summary>
     public static double HeightOf(string building) => building switch
     {
@@ -184,6 +189,7 @@ public partial class Layout
         "Desc_StorageContainerMk2_C" => 8,
         "Desc_PipeStorageTank_C" => 8,
         "Desc_IndustrialTank_C" => 12, // (not verified in game)
+        InputStub or InputStubPipe => 1,
         "Desc_ResourceSink_C" => 24,
         "Desc_GeneratorFuel_C" => 27,
         "Desc_GeneratorCoal_C" => 36,
@@ -256,11 +262,35 @@ public partial class Layout
         return plan.With(plan.Nodes.Where(n => !merge.ContainsKey(n.Key)).ToList(), edges);
     }
 
+    /// <summary>
+    /// Overflow without a box (user, 2026-09-26): a surplus that is the end of a split line other machines use, or spare
+    /// capacity of machines with one output (it just backs up), is cut off where the line ends — no box, no belt to
+    /// the station. A byproduct with nowhere else to go keeps its box (or sink / generator): cut off, it would stop its
+    /// machine.
+    /// </summary>
+    static Plan CutOffOverflow(Plan plan, Settings s)
+    {
+        var nodes = plan.Nodes.ToDictionary(n => n.Key);
+        var cut = new HashSet<string>();
+        foreach (var n in plan.Nodes.Where(n => n.Kind == NodeKind.Surplus))
+        {
+            string item = n.Item.Split('#')[0];
+            if (s.Sinks(item)) continue; // (ends in a sink: keep)
+            var into = plan.Edges.Where(e => e.To == n.Key).ToList();
+            var producers = into.Select(e => nodes.GetValueOrDefault(e.From)).Where(p => p?.Recipe != null).ToList();
+            bool sharedLine = plan.Edges.Any(e => e.Item == n.Item && e.To != n.Key && nodes.GetValueOrDefault(e.To)?.Kind == NodeKind.Machine);
+            bool harmless = producers.Count > 0 && producers.All(p => p!.Recipe!.Out.Count == 1);
+            if (sharedLine || harmless) cut.Add(n.Key);
+        }
+        if (cut.Count == 0) return plan;
+        return plan.With(plan.Nodes.Where(n => !cut.Contains(n.Key)).ToList(), plan.Edges.Where(e => !cut.Contains(e.To)).ToList());
+    }
+
     /// <summary>Try several row lengths and row widths; keep the most square factory (ties: shortest belts).</summary>
     public static Layout Build(Plan plan, Settings s)
     {
         _floor = null; SetTimeLimit(s.LayoutSeconds);
-        var L = BuildLayout(SurplusIntoOutputs(plan), s);
+        var L = BuildLayout(CutOffOverflow(SurplusIntoOutputs(plan), s), s);
         // machines across a blueprint tile border, when allowed: marked for placing by hand, with a power hint
         if (s.BlueprintTile > 0 && s.HandPlaceAcrossTiles)
         {
@@ -316,7 +346,7 @@ public partial class Layout
             {
                 ms = System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(s))!;
                 foreach (var t in ms.Targets) t.Rate /= copies;
-                mplan = Plan.Build(ms);
+                mplan = CutOffOverflow(SurplusIntoOutputs(Plan.Build(ms)), ms);
             }
             if (s.Floors > 1)
             {
@@ -627,7 +657,8 @@ public partial class Layout
         // ---- station ("pins"): the boxes are blocks too — one group for inputs + real outputs, one for the spare boxes.
         //      Input boxes feed the row's output belts (north face), output boxes take from its input belts (south face),
         //      so they are wired exactly like machines: straight to the trunk of their item, nothing runs around outside.
-        string Box(Lane l, GraphNode? n = null) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
+        string Box(Lane l, GraphNode? n = null) => n == null || n.Kind is NodeKind.Raw or NodeKind.Import ? (l.Fluid ? InputStubPipe : InputStub)
+            : l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
             : n?.Kind == NodeKind.Surplus && s.Sinks(l.Item.Split('#')[0]) ? SinkBox : "Desc_StorageContainerMk2_C";
         Block? Station(IEnumerable<(GraphNode node, Lane lane, double rate)> ins, IEnumerable<(GraphNode node, Lane lane, double rate)> outs)
         {
@@ -635,8 +666,8 @@ public partial class Layout
             double x = 0;
             foreach (var w in ins.OrderBy(w => w.lane.Id))
             {
-                var (cw, cd) = Footprint(Box(w.lane));
-                slots.Add(new Slot(w.node, w.lane, w.rate, true, Box(w.lane), cw, cd, x));
+                var (cw, cd) = Footprint(Box(w.lane, w.node));
+                slots.Add(new Slot(w.node, w.lane, w.rate, true, Box(w.lane, w.node), cw, cd, x));
                 x += cw + 2;
             }
             if (slots.Count > 0 && outs.Any()) x += Foundation - 2; // inputs and outputs a foundation apart

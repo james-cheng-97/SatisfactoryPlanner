@@ -175,6 +175,41 @@ public class Settings
         return c;
     }
 
+    /// <summary>
+    /// Items this plan can make from the resources it can actually reach (not the ones marked not accessible, nor
+    /// hand-gathered ones), through recipes usable now; imported items count as reached. A recipe needing anything else
+    /// (e.g. petroleum coke when crude oil isn't accessible) is never chosen by itself — only when pinned.
+    /// </summary>
+    public HashSet<string> Reachable()
+    {
+        var key = string.Join(",", DisabledResources) + "|" + MaxTier + IncludeAlternates + IncludeMam + UseSave + (Unlocked?.Count ?? -1)
+                  + "|" + string.Join(",", ImportedItems) + "|" + string.Join(",", ExtraRecipes);
+        if (_reachKey == key && _reach != null) return _reach;
+        var made = new HashSet<string>(GameData.RawResources.Where(IsResourceAllowed).Concat(ImportedItems));
+        var usable = GameData.Recipes.Where(IsAvailable).ToList();
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var r in usable)
+                if (r.In.All(a => made.Contains(a.Item)))
+                    foreach (var o in r.Out) grew |= made.Add(o.Item);
+        }
+        _reachKey = key;
+        return _reach = made;
+    }
+    [System.Text.Json.Serialization.JsonIgnore] string? _reachKey;
+    [System.Text.Json.Serialization.JsonIgnore] HashSet<string>? _reach;
+    /// <summary>The pinned recipe for an item, if it can work here (its inputs reachable); a pin that needs a resource
+    /// marked not accessible is skipped — the plan falls back to what can be made (the plan warns about it).</summary>
+    public string? WorkingPin(string item) =>
+        RecipeOverrides.TryGetValue(item, out var cls) && GameData.Recipes.FirstOrDefault(r => r.ClassName == cls) is { } r && IsAvailable(r) && Reaches(r) ? cls : null;
+    /// <summary>Pins skipped because they need something unreachable: (item, recipe).</summary>
+    public IEnumerable<(string item, RecipeDef recipe)> SkippedPins() => RecipeOverrides
+        .Select(kv => (kv.Key, GameData.Recipes.FirstOrDefault(r => r.ClassName == kv.Value)))
+        .Where(p => p.Item2 != null && IsAvailable(p.Item2) && !Reaches(p.Item2)).Select(p => (p.Key, p.Item2!));
+    /// <summary>Every input of the recipe can be made from what this plan reaches.</summary>
+    public bool Reaches(RecipeDef r) { var re = Reachable(); return r.In.All(a => re.Contains(a.Item)); }
+
     public List<RecipeDef> OptionsFor(string item) =>
         GameData.Recipes.Where(r => IsAvailable(r) && r.Out.Any(o => o.Item == item))
             // order by class name, not display name, so default picks don't change with the UI language
@@ -184,13 +219,14 @@ public class Settings
     {
         if (GameData.RawResources.Contains(item) || IsSupplied(item)) return null;
         var opts = OptionsFor(item);
-        if (RecipeOverrides.TryGetValue(item, out var cls) && opts.FirstOrDefault(r => r.ClassName == cls) is { } o)
+        if (WorkingPin(item) is { } cls && opts.FirstOrDefault(r => r.ClassName == cls) is { } o)
             return o;
         // default: standard main-product recipe, then a standard byproduct (e.g. Heavy Oil Residue from Plastic),
         // then alternates; packaging/unpackaging and matter conversion only as a last resort (they form loops)
         static bool Loopy(RecipeDef r) => r.Building is "Desc_Packager_C" or "Desc_Converter_C";
         // never a hand-gathered input by default (alien protein, leaves…): imported as it is instead, if nothing else
-        opts = opts.Where(GameData.IsSustainable).ToList();
+        // (nor anything that traces back to a resource marked not accessible: the item itself is imported instead)
+        opts = opts.Where(r => GameData.IsSustainable(r) && Reaches(r)).ToList();
         return opts.FirstOrDefault(r => r.Out[0].Item == item && !r.Alternate && !Loopy(r))
                ?? opts.FirstOrDefault(r => !r.Alternate && !Loopy(r))
                ?? opts.FirstOrDefault(r => r.Out[0].Item == item && !Loopy(r))

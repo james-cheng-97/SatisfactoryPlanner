@@ -30,12 +30,14 @@ public static class Optimizer
         if (res.Demand.Count == 0) return res;
 
         // pinned recipes: a manual pick in the table forbids the other recipes whose main product is that item
+        // (a pin that can't work here — it needs a resource marked not accessible — is skipped)
         var recipes = only != null ? only.ToList() : GameData.Recipes.Where(s.IsAvailable).Where(r =>
-            !s.RecipeOverrides.TryGetValue(r.Out[0].Item, out var pin) || pin == r.ClassName ||
-            !GameData.Recipes.Any(p => p.ClassName == pin && s.IsAvailable(p))).ToList();
+            s.WorkingPin(r.Out[0].Item) is not { } pin || pin == r.ClassName).ToList();
         recipes.RemoveAll(r => s.IsSupplied(r.Out[0].Item)); // supplied items (plastic / rubber) come in, not made here
         // not sustainable (needs something gathered by hand, e.g. alien protein → biomass → biocoal): only when pinned
-        if (only == null) recipes.RemoveAll(r => !GameData.IsSustainable(r) && !s.RecipeOverrides.ContainsValue(r.ClassName));
+        // nor one tracing back to a resource marked not accessible (petroleum coke when crude oil is off): importing a
+        // little oil must not beat importing the item — the player said that resource isn't there
+        if (only == null) recipes.RemoveAll(r => !s.Reaches(r) || !GameData.IsSustainable(r) && !s.RecipeOverrides.ContainsValue(r.ClassName));
 
         var items = recipes.SelectMany(r => r.In.Concat(r.Out)).Select(a => a.Item).Concat(res.Demand.Keys).Distinct().ToList();
         var row = items.Select((it, i) => (it, i)).ToDictionary(x => x.it, x => x.i);

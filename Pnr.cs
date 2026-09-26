@@ -475,7 +475,8 @@ public partial class Layout
                 });
             }
         }
-        string BoxOf(Lane l, GraphNode n) => l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
+        string BoxOf(Lane l, GraphNode n) => n.Kind is NodeKind.Raw or NodeKind.Import ? (l.Fluid ? InputStubPipe : InputStub) // (inputs: a belt / pipe end, no box)
+            : l.Fluid ? (s.IndustrialFluidBox ? "Desc_IndustrialTank_C" : "Desc_PipeStorageTank_C")
             : n.Kind == NodeKind.Surplus && s.Sinks(l.Item.Split('#')[0]) ? SinkBox : "Desc_StorageContainerMk2_C";
         foreach (var (node, lane, rate) in padIn.Concat(padOut))
         {

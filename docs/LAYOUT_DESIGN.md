@@ -178,6 +178,31 @@ Sizes / ports: sink 16 × 13 m (24 m), input 5 m out; fuel generator 20 × 20 (2
 10 × 26 (36 m), belt + water 11 m out — ports measured in the player's save, templates from it too.
 Tests: scratchpad `QUICK=10 CLOG=.. CLOG2=..` (loop resin chain), `QUICK=12` (heavy oil → Residual Fuel → generator).
 
+### 2.10e Inputs and overflow without boxes (user, 2026-09-26)
+- **Inputs are belt / pipe ends** (`Layout.InputStub` / `InputStubPipe`): no box in the blueprint, the belt starts
+  loose where the player brings the supply; the wiring sheet lists where ("Inputs: …"), not as warnings. In place &
+  route the stub keeps the room its box took (5 × 10, pipes 4 × 4): smaller cells upset the placement (RIP 1 -> 2,
+  plastic 4 -> 6 blueprints).
+- **Overflow is cut off at the end of its line** (`CutOffOverflow`): a surplus that is the end of a split line other
+  machines use, or spare capacity of single-output machines (it backs up harmlessly), gets no box and no belt. A
+  byproduct with nowhere else to go keeps its box (or sink / generator); cut off, it would stop its machine.
+- Only product outputs keep a box.
+
+### 2.10f The player's hand-built motor factory (Eorzea Cafe, 2026-09-26) — the target for a columns engine
+10 motors / min (wire, pipe from iron; copper rotors) in **57 × 77 m on 2 levels, ~590 m of belt, 1 box**; the designer
+made 184 × 216 m, 20 blueprints, 3.4 km of belt for the same plan (place & route fell back to rows). How it's built:
+1. **One column per production step**, machines packed at their own width: refineries (10 m pitch) → wire / pipe
+   constructors (8 m) → stator assemblers (9 m) → the 2 motor assemblers side by side at the end, output box after them.
+2. **One belt corridor between neighbouring columns**: the producers' merger chain runs straight on as the
+   consumers' splitter chain; nothing crosses the factory.
+3. **Manifolds run raised, lifts go straight from a splitter into a machine / from a machine up into a merger**, so the
+   input and output manifolds share one corridor at different heights.
+4. **Side chains upstairs**: screws and rotors on a floor 12 m up, above the column they feed.
+5. **Inputs arrive on belts at one edge; manifolds just end** (the last splitter's through output left free).
+6. **I/O ports close together**: a belt only needs room for its lift — two lifts side by side need about 4 m, so
+   inputs / outputs sit at ~4 m pitch in one bank, not as separate PCB-style pads (pipes the same, a small tank
+   where a pipe input needs one).
+
 ### 2.11 In-game test saves (scratchpad `bp/`)
 `inject.js` puts a factory's tile blueprints (write.js objects, `DUMP_OBJECTS=1`) into a copy of a save, 50 m east / 100 m
 up from the player (`STRIP=1` removes an earlier injection: names 2100000000–2100099999). `testrun.js` then joins every

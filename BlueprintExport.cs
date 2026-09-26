@@ -51,7 +51,8 @@ public static class BlueprintExport
     /// (tiles numbered from the south-west corner: row r, column c). Belts crossing a tile border are cut there and
     /// listed in <paramref name="joints"/>; problems (loose ends, unsupported parts) go to <paramref name="warnings"/>.
     /// </summary>
-    public static List<Spec> FromLayout(Layout L, Settings s, string name, int dim, string baseBlueprint, List<string> warnings, List<Joint> joints)
+    /// <param name="inputs">Filled with where each input's belt / pipe starts (no box there: the player brings it).</param>
+    public static List<Spec> FromLayout(Layout L, Settings s, string name, int dim, string baseBlueprint, List<string> warnings, List<Joint> joints, List<string>? inputs = null)
     {
         double T = dim * Layout.Foundation;
         // layout metres (x east, y north, origin SW corner) → game centimetres (X east, Y south), per tile later
@@ -86,6 +87,7 @@ public static class BlueprintExport
         foreach (var b in L.Buildings.Where(b => b.Kind != "hole" && b.Floor < floors))
         {
             double zb = FloorTop + E(b.Floor) * 100;
+            if (Layout.IsInputStub(b.Building)) continue; // (an input: its belt / pipe starts here, the player brings the supply)
             var cls = Build(b.Building);
             if (!Ports.TryGetValue(cls, out var ports)) { warnings.Add($"no blueprint data for {b.Building} — skipped"); continue; }
             // machines: inputs to the south (game +Y); our boxes connect on their north side only — input boxes need
@@ -289,7 +291,14 @@ public static class BlueprintExport
             End? from, to; Pt pa, pz;
             if (liftOut.TryGetValue(sk, out var lso)) { from = new End(lso.id, "ConveyorAny1"); pa = lso.at; }
             else if (attach.TryGetValue(sk, out var sa)) from = AttachPort(sa, Dir(first.a, first.z), true, out pa);
-            else { from = MachinePort(first.a, (fluid ? PipeZ : BeltZ) + first.h * 100, false, fluid, out pa); if (from == null) warnings.Add($"{GameData.Item(first.item.Split('#')[0]).Name}: loose belt start at ({first.a.X / 100:0}, {first.a.Y / 100:0})"); }
+            else
+            {
+                from = MachinePort(first.a, (fluid ? PipeZ : BeltZ) + first.h * 100, false, fluid, out pa);
+                // an input's belt / pipe starts loose on purpose (no box: the player brings the supply there)
+                bool stub = L.Buildings.Any(b => Layout.IsInputStub(b.Building) && Math.Abs((b.X + b.W / 2) * 100 - first.a.X) < 600 && Math.Abs(-(b.Y + b.H / 2) * 100 - first.a.Y) < 600);
+                if (from == null && stub) inputs?.Add($"{GameData.Item(first.item.Split('#')[0]).Name}: ({first.a.X / 100 / Layout.Foundation:0.#}, {-first.a.Y / 100 / Layout.Foundation:0.#})");
+                else if (from == null) warnings.Add($"{GameData.Item(first.item.Split('#')[0]).Name}: loose belt start at ({first.a.X / 100:0}, {first.a.Y / 100:0})");
+            }
             if (liftIn.TryGetValue(ek, out var lei)) { to = new End(lei.id, "ConveyorAny0"); pz = lei.at; }
             else if (attach.TryGetValue(ek, out var ea)) to = AttachPort(ea, Dir(last.a, last.z), false, out pz);
             else { to = MachinePort(last.z, (fluid ? PipeZ : BeltZ) + last.hz * 100, true, fluid, out pz); if (to == null) warnings.Add($"{GameData.Item(first.item.Split('#')[0]).Name}: loose belt end at ({last.z.X / 100:0}, {last.z.Y / 100:0})"); }
