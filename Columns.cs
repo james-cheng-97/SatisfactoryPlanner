@@ -218,11 +218,17 @@ public static class Columns
         double storey = Math.Max(12, Math.Ceiling((groundTop + 4) / 4) * 4);
         L.FloorElevation = floors == 1 ? [0] : [0, storey];
 
-        // ---- place the machines (y up from 0), groups stacked in their column
+        // inputs used by one ground-floor column come in from the south, straight up its track: no header row
+        var inputSet = nodes.Values.Where(n => n.Kind is NodeKind.Raw or NodeKind.Import).Select(n => n.Item.Split('#')[0]).ToHashSet();
+        var southInputs = inputSet.Where(it => trackX.Keys.Count(k => k.item == it && !k.collect) == 1
+                                               && trackX.Keys.Where(k => k.item == it && !k.collect).All(k => cols[k.col].Floor == 0)).ToHashSet();
+        double yBase = southInputs.Count > 0 ? 4 : 0; // (room for their belts to start south of the machines)
+
+        // ---- place the machines (y up from yBase), groups stacked in their column
         double colTop = 0;
         foreach (var c in cols)
         {
-            double y = 0;
+            double y = yBase;
             foreach (var g in c.Groups)
             {
                 for (int m = 0; m < g.Node.Machines; m++)
@@ -305,7 +311,7 @@ public static class Columns
         foreach (var ((ci, item, collect), (tx, _)) in trackX) (collect ? sources : taps)[item].Add((cols[ci].Floor, tx));
         foreach (var it in items)
         {
-            if (inputItems.Contains(it.item)) (sources.TryGetValue(it.item, out var l) ? l : sources[it.item] = new()).Add((0, inputBankX + 2));
+            if (inputItems.Contains(it.item) && !southInputs.Contains(it.item)) (sources.TryGetValue(it.item, out var l) ? l : sources[it.item] = new()).Add((0, inputBankX + 2));
             if (boxItems.ContainsKey(it.item)) (taps.TryGetValue(it.item, out var l) ? l : taps[it.item] = new()).Add((0, eastX + 2));
         }
 
@@ -319,9 +325,10 @@ public static class Columns
             int r = rowSpans.FindIndex(row => !row.Any(v => sp.Any(w => w.f == v.f && v.a < w.b + 2 && w.a < v.b + 2)));
             if (r < 0) { rowSpans.Add(new()); r = rowSpans.Count - 1; }
             rowSpans[r].AddRange(sp);
-            rowY[it.item] = colTop + 4 + r * RowPitch;
+            rowY[it.item] = colTop + 2 + r * RowPitch;
         }
-        double top = colTop + 4 + rowSpans.Count * RowPitch;
+        double top = colTop + 2 + rowSpans.Count * RowPitch;
+        log?.Add($"header: {rowSpans.Count} rows over columns {colTop:0} m tall: " + string.Join(" / ", rowY.GroupBy(kv => kv.Value).OrderBy(g => g.Key).Select(g => string.Join(", ", g.Select(kv => GameData.Item(kv.Key).Name)))));
         double Span(string item) => SpansOf(item).Sum(v => v.b - v.a);
         List<(int f, double a, double b)> SpansOf(string item)
         {
@@ -343,6 +350,23 @@ public static class Columns
         // ---- tracks: collect tracks run north from their first machine to their row; distribute tracks south from theirs
         foreach (var ((ci, item, collect), (tx, tz)) in trackX)
         {
+            if (!collect && southInputs.Contains(item))
+            {
+                // an input from the south: its belt / pipe starts below the machines and runs up the track
+                bool fl = GameData.Item(item).IsFluid;
+                var ys1 = L.Belts.Where(b => b.Floor == 0 && b.Item == item && b.X1 == tx && b.Y1 == b.Y2 && Math.Abs(b.Z1 - tz) < 0.01)
+                    .Select(b => b.Y1).Distinct().OrderBy(v => v).ToList();
+                if (ys1.Count == 0) continue;
+                L.Buildings.Add(new Placed("input", fl ? Layout.InputStubPipe : Layout.InputStub, GameData.Item(item).Name, tx - 1, 0, 2, 2, item + "#1"));
+                if (tz > 0)
+                {
+                    Seg(0, tx, 1, 0, tx, 2, 0, item, fl);
+                    Lift(0, tx, 2, 0, tz, item, false);
+                    Seg(0, tx, 2, tz, tx, ys1[^1], tz, item, fl);
+                }
+                else Seg(0, tx, 1, 0, tx, ys1[^1], 0, item, fl);
+                continue;
+            }
             if (!rowY.TryGetValue(item, out var row)) continue;
             bool fluid = GameData.Item(item).IsFluid;
             int f = cols[ci].Floor;
