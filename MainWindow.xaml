@@ -91,6 +91,21 @@
         </Border>
 
         <!-- Settings -->
+        <!-- compact menus: the left panel folded to icons with their current value; a click opens that card as a flyout -->
+        <Border x:Name="Rail" DockPanel.Dock="Left" Width="66" Visibility="Collapsed" Background="{StaticResource B.Bar}"
+                BorderBrush="{StaticResource B.Line}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <Button DockPanel.Dock="Bottom" x:Name="RailPin" Content="»" Margin="8,8,8,12" Height="36" Padding="0" Click="RailPin_Click"
+                        ToolTip="{Binding [rail.pin], Source={x:Static local:Loc.Instance}}"/>
+                <StackPanel x:Name="RailItems" Margin="8,10,8,0"/>
+            </DockPanel>
+        </Border>
+        <Popup x:Name="RailFlyout" StaysOpen="False" Placement="Right" HorizontalOffset="6" AllowsTransparency="True" Closed="RailFlyout_Closed">
+            <Border x:Name="RailFlyoutHost" Width="380" MaxHeight="{Binding ActualHeight, ElementName=Shell}" Background="{StaticResource B.Panel}"
+                    BorderBrush="{StaticResource B.LineStrong}" BorderThickness="1" CornerRadius="12" Padding="10">
+                <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.5"/></Border.Effect>
+            </Border>
+        </Popup>
         <ScrollViewer x:Name="SidePanel" DockPanel.Dock="Left" Width="370" VerticalScrollBarVisibility="Auto" Background="{StaticResource B.Panel}">
             <WrapPanel x:Name="SideStack" Margin="16" ItemWidth="338">
                 <GroupBox Header="{Binding [grp.targets], Source={x:Static local:Loc.Instance}}">
@@ -257,16 +272,18 @@
         </ScrollViewer>
 
         <!-- Results -->
+        <!-- the whole results page scrolls as one (no table with its own scrollbar); tree / layout get a fixed height -->
+        <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="PageScroll_Wheel">
         <Grid x:Name="ResultsGrid" Margin="20,16,20,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="3*"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="2*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <StackPanel>
                 <!-- headline numbers -->
-                <UniformGrid Columns="4" Margin="0,0,-10,10">
+                <UniformGrid x:Name="KpiCards" Columns="4" Margin="0,0,-10,10">
                     <Border x:Name="KpiMachinesCard" Style="{StaticResource Card}" Margin="0,0,10,0">
                         <StackPanel>
                             <TextBlock Text="{Binding [kpi.machines], Source={x:Static local:Loc.Instance}}" Style="{StaticResource SectionTitle}" Margin="0"/>
@@ -296,6 +313,12 @@
                         </StackPanel>
                     </Border>
                 </UniformGrid>
+                <Border x:Name="KpiLine" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,10" Visibility="Collapsed">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" x:Name="KpiCardsToggle" Content="{Binding [kpi.showCards], Source={x:Static local:Loc.Instance}}" Style="{StaticResource GhostButton}" Click="KpiCardsToggle_Click"/>
+                        <TextBlock x:Name="KpiLineText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="14"/>
+                    </DockPanel>
+                </Border>
                 <DockPanel>
                     <CheckBox DockPanel.Dock="Right" x:Name="CountExtractorsCheck" Content="{Binding [chk.countExtractors], Source={x:Static local:Loc.Instance}}" VerticalAlignment="Center" Click="Input_Changed"/>
                     <TextBlock x:Name="SummaryText" Foreground="{StaticResource B.Muted}" VerticalAlignment="Center" TextWrapping="Wrap"/>
@@ -715,6 +738,7 @@
                 </TabControl>
             </Grid>
         </Grid>
+        </ScrollViewer>
     </DockPanel>
 
     <!-- the menu: save, this plan, app settings (the only way to them on a tall screen) -->
@@ -762,6 +786,12 @@
                             <RadioButton x:Name="ScreenAuto" GroupName="screen" Content="{Binding [screen.auto], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
                             <RadioButton x:Name="ScreenWide" GroupName="screen" Content="{Binding [screen.wide], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
                             <RadioButton x:Name="ScreenTall" GroupName="screen" Content="{Binding [screen.tall], Source={x:Static local:Loc.Instance}}" Click="ScreenLayout_Click"/>
+                        </UniformGrid>
+                        <TextBlock Text="{Binding [menu.compact], Source={x:Static local:Loc.Instance}}" Style="{StaticResource Hint}" Margin="0,0,0,4"/>
+                        <UniformGrid Columns="3" Margin="0,0,0,12">
+                            <RadioButton x:Name="CompactAuto" GroupName="compact" Content="{Binding [screen.auto], Source={x:Static local:Loc.Instance}}" Click="CompactMenus_Click"/>
+                            <RadioButton x:Name="CompactOn" GroupName="compact" Content="{Binding [compact.on], Source={x:Static local:Loc.Instance}}" Click="CompactMenus_Click"/>
+                            <RadioButton x:Name="CompactOff" GroupName="compact" Content="{Binding [compact.off], Source={x:Static local:Loc.Instance}}" Click="CompactMenus_Click"/>
                         </UniformGrid>
                         <Button Content="{Binding [btn.update], Source={x:Static local:Loc.Instance}}" HorizontalAlignment="Stretch" Click="UpdateFromWiki_Click"/>
                     </StackPanel>

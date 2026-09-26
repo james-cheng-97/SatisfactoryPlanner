@@ -74,6 +74,11 @@ public static class GameData
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SatisfactoryPlanner");
     public static string DataDir => Path.Combine(AppDir, "data");
 
+    /// <summary>Items a factory can make from raw resources (see Load).</summary>
+    public static HashSet<string> Sustainable { get; private set; } = new();
+    /// <summary>A recipe whose inputs can all be made by the factory (none gathered by hand, e.g. alien protein).</summary>
+    public static bool IsSustainable(RecipeDef r) => Sustainable.Count == 0 || r.In.All(a => Sustainable.Contains(a.Item));
+
     public static readonly string[] RawResources =
     {
         "Desc_OreIron_C", "Desc_OreCopper_C", "Desc_Stone_C", "Desc_Coal_C", "Desc_OreGold_C", "Desc_RawQuartz_C",
@@ -199,6 +204,17 @@ public static class GameData
             });
         }
         Recipes = recipes.Where(r => r.Duration > 0 && r.Out.Count > 0).ToList();
+        // what a factory can make from raw resources alone (anything reachable through automated recipes); the rest —
+        // creature parts, leaves, wood, mushrooms… — has to be gathered by hand, so it's never a sustainable input
+        var made = new HashSet<string>(RawResources);
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var r in Recipes)
+                if (r.In.All(a => made.Contains(a.Item)))
+                    foreach (var o in r.Out) grew |= made.Add(o.Item);
+        }
+        Sustainable = made;
     }
 
     /// <summary>

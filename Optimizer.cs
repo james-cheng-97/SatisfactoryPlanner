@@ -34,6 +34,8 @@ public static class Optimizer
             !s.RecipeOverrides.TryGetValue(r.Out[0].Item, out var pin) || pin == r.ClassName ||
             !GameData.Recipes.Any(p => p.ClassName == pin && s.IsAvailable(p))).ToList();
         recipes.RemoveAll(r => s.IsSupplied(r.Out[0].Item)); // supplied items (plastic / rubber) come in, not made here
+        // not sustainable (needs something gathered by hand, e.g. alien protein → biomass → biocoal): only when pinned
+        if (only == null) recipes.RemoveAll(r => !GameData.IsSustainable(r) && !s.RecipeOverrides.ContainsValue(r.ClassName));
 
         var items = recipes.SelectMany(r => r.In.Concat(r.Out)).Select(a => a.Item).Concat(res.Demand.Keys).Distinct().ToList();
         var row = items.Select((it, i) => (it, i)).ToDictionary(x => x.it, x => x.i);

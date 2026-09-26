@@ -50,6 +50,8 @@ public class Settings
     public int LayoutSeconds { get; set; } = 120;
     /// <summary>Window arrangement: "auto" (tall window → the settings go across the top), "wide" or "tall". App-wide.</summary>
     public string ScreenLayout { get; set; } = "auto";
+    /// <summary>Compact menus (icon rail, one-line summary): "auto" (small windows, e.g. 1080 × 1920), "on" or "off". App-wide.</summary>
+    public string CompactMenus { get; set; } = "auto";
     /// <summary>Plastic + rubber plan: the user's answer to "use the recycling loop?" (null = not asked yet).</summary>
     public bool? PolymerLoopAnswer { get; set; }
     /// <summary>How a clogging surplus is dealt with, per item (overflow items "&lt;item&gt;@ovf" too): absent = overflow into
@@ -187,6 +189,8 @@ public class Settings
         // default: standard main-product recipe, then a standard byproduct (e.g. Heavy Oil Residue from Plastic),
         // then alternates; packaging/unpackaging and matter conversion only as a last resort (they form loops)
         static bool Loopy(RecipeDef r) => r.Building is "Desc_Packager_C" or "Desc_Converter_C";
+        // never a hand-gathered input by default (alien protein, leaves…): imported as it is instead, if nothing else
+        opts = opts.Where(GameData.IsSustainable).ToList();
         return opts.FirstOrDefault(r => r.Out[0].Item == item && !r.Alternate && !Loopy(r))
                ?? opts.FirstOrDefault(r => !r.Alternate && !Loopy(r))
                ?? opts.FirstOrDefault(r => r.Out[0].Item == item && !Loopy(r))

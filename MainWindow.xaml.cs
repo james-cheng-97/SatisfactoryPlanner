@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -38,6 +39,8 @@ public partial class MainWindow : Window
         Closing += (_, _) => SaveSettings();
         SizeChanged += (_, _) => ApplyScreenLayout();
         Loaded += (_, _) => ApplyScreenLayout();
+        PageScroll.SizeChanged += (_, _) => SizeViews();
+        BuildRail();
         // frosted glass: the layout underneath blurs while a busy overlay is up, so its labels don't fight the status text
         void Frost(object? _, DependencyPropertyChangedEventArgs __) =>
             LayoutScroll.Effect = LayoutBusy.IsVisible || ExportBusy.IsVisible ? new System.Windows.Media.Effects.BlurEffect { Radius = 10, KernelType = System.Windows.Media.Effects.KernelType.Gaussian } : null;
@@ -228,6 +231,10 @@ public partial class MainWindow : Window
         KpiClogSub.Text = open > 0 ? Loc.T("kpi.clogOpenSub", resolved) : resolved > 0 ? Loc.T("kpi.clogAllSub", resolved) : Loc.T("kpi.clogNoneSub");
         KpiClogCard.Background = (System.Windows.Media.Brush)FindResource(open > 0 ? "B.WarnSoft" : "B.GoodSoft");
         KpiClogValue.Foreground = (System.Windows.Media.Brush)FindResource(open > 0 ? "B.Warn" : "B.Good");
+        KpiLineText.Text = Loc.T("kpi.line", KpiMachinesValue.Text, plan.Power, raws.Count) + "   ·   " + KpiClogValue.Text
+            + (raws.Count > 0 ? "   ·   " + string.Join(", ", raws.Take(3).Select(r => $"{r.ItemName} {r.Rate:0.#}")) : "");
+        KpiLineText.Foreground = (System.Windows.Media.Brush)FindResource(open > 0 ? "B.Warn" : "B.Text");
+        UpdateRail();
         // the smaller facts under the cards
         SummaryText.Text = (plan.SplitterParts + plan.MergerParts + plan.JunctionParts > 0
                 ? Loc.T("summary.logistics", plan.SplitterParts, plan.MergerParts, plan.JunctionParts).TrimStart(' ', '·') : "")
@@ -275,9 +282,6 @@ public partial class MainWindow : Window
         DockPanel.SetDock(SidePanel, tall ? Dock.Top : Dock.Left);
         SidePanel.Width = tall ? double.NaN : 370;
         SidePanel.MaxHeight = tall ? Math.Max(240, ActualHeight * 0.28) : double.PositiveInfinity;
-        // the views get the height; raw resources / outputs stay a short strip at the bottom
-        ResultsGrid.RowDefinitions[1].Height = new GridLength(tall ? 4 : 3, GridUnitType.Star);
-        ResultsGrid.RowDefinitions[3].Height = new GridLength(tall ? 1.2 : 2, GridUnitType.Star);
         double avail = tall ? Math.Max(320, ActualWidth - 50) : 338;
         int cols = tall ? Math.Max(1, (int)((avail + 12) / 310)) : 1;
         SideStack.ItemWidth = tall ? Math.Floor((avail + 12) / cols) : 338;
@@ -285,7 +289,148 @@ public partial class MainWindow : Window
         var v = tall ? Visibility.Collapsed : Visibility.Visible;
         LanguageCombo.Visibility = v; UpdateButton.Visibility = v; LoadSaveButton.Visibility = v;
         ScreenAuto.IsChecked = mode == "auto"; ScreenWide.IsChecked = mode == "wide"; ScreenTall.IsChecked = mode == "tall";
+        // compact menus: small windows (a 1080 × 1920 screen, a laptop) fold the left panel into the icon rail and the
+        // summary cards into one line, so the table gets the room
+        string cm = _settings.CompactMenus ?? "auto";
+        _compact = cm == "on" || cm == "auto" && (ActualWidth < 1200 || ActualHeight < 760);
+        if (!_compact) RailFlyout.IsOpen = false;
+        Rail.Visibility = _compact ? Visibility.Visible : Visibility.Collapsed;
+        SidePanel.Visibility = _compact ? Visibility.Collapsed : Visibility.Visible;
+        KpiLine.Visibility = _compact ? Visibility.Visible : Visibility.Collapsed;
+        KpiCards.Visibility = _compact && !_cardsShown ? Visibility.Collapsed : Visibility.Visible;
+        KpiCardsToggle.Content = Loc.T(_cardsShown ? "kpi.hideCards" : "kpi.showCards");
+        CompactAuto.IsChecked = cm == "auto"; CompactOn.IsChecked = cm == "on"; CompactOff.IsChecked = cm == "off";
+        SizeViews();
         UpdateSaveUi();
+    }
+
+    // ---------- compact menus: the icon rail ----------
+
+    bool _compact, _cardsShown;
+    List<FrameworkElement> _sideCards = new();
+    readonly List<TextBlock> _railValues = new();
+    int _flyoutCard = -1;
+
+    /// <summary>One rail button per left-panel card (same order), an icon and the card's current value under it.</summary>
+    void BuildRail()
+    {
+        _sideCards = SideStack.Children.OfType<FrameworkElement>().ToList();
+        string[] icons =
+        [
+            "M21,8 L12,3 L3,8 L12,13 Z M3,8 V16 L12,21 L21,16 V8",          // products
+            "M12,3 V15 M7,10 L12,15 L17,10 M4,21 H20",                        // imported
+            "M4,6 H20 M4,12 H14 M4,18 H10",                                   // recipe selection
+            "M4,20 H8 V14 H4 Z M10,20 H14 V9 H10 Z M16,20 H20 V4 H16 Z",      // tier
+            "M12,2 L15,8 L21,9 L16.5,13 L17.5,19 L12,16 L6.5,19 L7.5,13 L3,9 L9,8 Z", // resource nodes
+            "M14,4 L20,10 L11,19 H5 V13 Z",                                   // extraction
+            "M12,4 A8,8 0 1 1 11.99,4 M12,8 V12 L15,14",                     // rounding
+            "M3,9 H21 M3,15 H21 M7,9 V15 M12,9 V15 M17,9 V15",               // belts
+        ];
+        for (int i = 0; i < _sideCards.Count; i++)
+        {
+            var value = new TextBlock { FontFamily = (FontFamily)FindResource("F.Mono"), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center,
+                                        Foreground = (Brush)FindResource("B.TextSoft"), Margin = new Thickness(0, 3, 0, 0) };
+            _railValues.Add(value);
+            var icon = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(icons[Math.Min(i, icons.Length - 1)]), Stroke = (Brush)FindResource("B.TextSoft"), StrokeThickness = 1.8,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
+                Width = 20, Height = 20, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center
+            };
+            var panel = new StackPanel(); panel.Children.Add(icon); panel.Children.Add(value);
+            int k = i;
+            var btn = new Button { Content = panel, Height = 54, Margin = new Thickness(0, 0, 0, 4), Padding = new Thickness(0), Style = (Style)FindResource("GhostButton") };
+            var header = _sideCards[i] is HeaderedContentControl h ? h.Header : null;
+            btn.ToolTip = header;
+            System.Windows.Automation.AutomationProperties.SetName(btn, header?.ToString() ?? "");
+            btn.Click += (_, _) => OpenFlyout(k, btn);
+            RailItems.Children.Add(btn);
+        }
+    }
+
+    /// <summary>The rail values: what each card is set to now.</summary>
+    void UpdateRail()
+    {
+        if (_railValues.Count < 8) return;
+        var miner = System.Text.RegularExpressions.Regex.Match(_settings.Miner ?? "", @"Mk(\d)");
+        string[] v =
+        [
+            _targets.Count(t => t.Item != null).ToString(),
+            _settings.ImportedItems.Count.ToString(),
+            _settings.Optimize ? "min" : "pick",
+            "T" + _settings.MaxTier,
+            GameData.RawResources.Count(r => _settings.IsResourceAllowed(r)).ToString(),
+            miner.Success ? "Mk" + miner.Groups[1].Value : "—",
+            _settings.Mode switch { RoundingMode.Exact => "exact", RoundingMode.SteadyRate => "rate", RoundingMode.NoClog => "noclog", _ => "drain" },
+            System.Text.RegularExpressions.Regex.Match(_settings.BeltLabel("Desc_IronPlate_C") ?? "", @"Mk\.?\s?\d") is { Success: true } bm ? bm.Value.Replace(".", "").Replace(" ", "") : "—",
+        ];
+        for (int i = 0; i < _railValues.Count && i < v.Length; i++) _railValues[i].Text = v[i];
+    }
+
+    /// <summary>Shows a left-panel card as a flyout next to its rail button (the card itself moves there and back).</summary>
+    void OpenFlyout(int i, FrameworkElement at)
+    {
+        if (RailFlyout.IsOpen && _flyoutCard == i) { RailFlyout.IsOpen = false; return; }
+        RailFlyout.IsOpen = false;
+        var card = _sideCards[i];
+        SideStack.Children.Remove(card);
+        card.Margin = new Thickness(0);
+        if (card is Expander ex) ex.IsExpanded = true;
+        RailFlyoutHost.Child = new ScrollViewer { Content = card, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        _flyoutCard = i;
+        RailFlyout.PlacementTarget = at;
+        RailFlyout.IsOpen = true;
+    }
+
+    void RailFlyout_Closed(object? sender, EventArgs e)
+    {
+        if (_flyoutCard < 0) return;
+        var card = _sideCards[_flyoutCard];
+        if (RailFlyoutHost.Child is ScrollViewer sv) sv.Content = null;
+        RailFlyoutHost.Child = null;
+        SideStack.Children.Insert(Math.Min(_flyoutCard, SideStack.Children.Count), card);
+        card.Margin = new Thickness(0, 0, 0, 12);
+        _flyoutCard = -1;
+        ApplyScreenLayout(); // (card margins for the current arrangement)
+    }
+
+    /// <summary>» on the rail: back to the full panel (compact menus off).</summary>
+    void RailPin_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.CompactMenus = "off";
+        ApplyScreenLayout();
+    }
+
+    void CompactMenus_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.CompactMenus = sender == CompactOn ? "on" : sender == CompactOff ? "off" : "auto";
+        ApplyScreenLayout();
+    }
+
+    void KpiCardsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _cardsShown = !_cardsShown;
+        ApplyScreenLayout();
+    }
+
+    // ---------- one page scroll ----------
+
+    /// <summary>The tree and the layout keep a fixed height (they pan and zoom inside); everything else is the page.</summary>
+    void SizeViews()
+    {
+        double h = Math.Max(420, PageScroll.ViewportHeight - 150);
+        TreeScroll.Height = h;
+        LayoutScroll.Height = Math.Max(360, h - 110);
+    }
+
+    /// <summary>The wheel scrolls the page, wherever it is (tables don't swallow it); over the tree or the layout it's
+    /// theirs (pan / zoom).</summary>
+    void PageScroll_Wheel(object sender, MouseWheelEventArgs e)
+    {
+        for (var d = e.OriginalSource as DependencyObject; d != null; d = d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            if (d == TreeScroll || d == LayoutScroll) return;
+        PageScroll.ScrollToVerticalOffset(PageScroll.VerticalOffset - e.Delta);
+        e.Handled = true;
     }
 
     void ScreenLayout_Click(object sender, RoutedEventArgs e)
@@ -432,6 +577,7 @@ public partial class MainWindow : Window
         st.Language = _settings.Language;
         st.CountExtractors = _settings.CountExtractors;
         st.ScreenLayout = _settings.ScreenLayout;
+        st.CompactMenus = _settings.CompactMenus;
         st.Targets = st.Targets.Where(x => x.Item != null).Select(x => new TargetSpec { Item = x.Item, Rate = x.Rate }).ToList();
         _settings = st;
     }
