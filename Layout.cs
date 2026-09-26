@@ -286,11 +286,21 @@ public partial class Layout
         return plan.With(plan.Nodes.Where(n => !cut.Contains(n.Key)).ToList(), plan.Edges.Where(e => !cut.Contains(e.To)).ToList());
     }
 
+    /// <summary>The plan as the layout engines see it (byproducts into outputs, overflow cut off) — for tests.</summary>
+    public static Plan PrepareForTest(Plan plan, Settings s) => CutOffOverflow(SurplusIntoOutputs(plan), s);
+
     /// <summary>Try several row lengths and row widths; keep the most square factory (ties: shortest belts).</summary>
     public static Layout Build(Plan plan, Settings s)
     {
         _floor = null; SetTimeLimit(s.LayoutSeconds);
-        var L = BuildLayout(CutOffOverflow(SurplusIntoOutputs(plan), s), s);
+        var prepared = CutOffOverflow(SurplusIntoOutputs(plan), s);
+        // the columns engine (experimental): deterministic and fast; place & route if it can't lay this plan out
+        if (s.LayoutEngine == "columns")
+        {
+            Say("status.columns");
+            if (Columns.Build(prepared, s) is { } cl) return cl;
+        }
+        var L = BuildLayout(prepared, s);
         // machines across a blueprint tile border, when allowed: marked for placing by hand, with a power hint
         if (s.BlueprintTile > 0 && s.HandPlaceAcrossTiles)
         {

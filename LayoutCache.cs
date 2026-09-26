@@ -43,7 +43,8 @@ public static class LayoutCache
     }
 
     public static string Key(int floors, int tile, bool hand, bool bigTank = false) => $"f{floors}-t{tile}-{(hand ? "hand" : "tiles")}{(bigTank ? "-ind" : "")}";
-    public static string Key(Settings s) => Key(s.Floors, s.BlueprintTile, s.BlueprintTile > 0 && s.HandPlaceAcrossTiles, s.IndustrialFluidBox);
+    public static string Key(Settings s) => Key(s.Floors, s.BlueprintTile, s.BlueprintTile > 0 && s.HandPlaceAcrossTiles, s.IndustrialFluidBox)
+                                             + (s.LayoutEngine == "columns" ? "-columns" : "");
 
     /// <summary>The plan's identity: its machines and lines, and every setting but the layout options.</summary>
     public static string PlanHash(Plan plan, Settings s)

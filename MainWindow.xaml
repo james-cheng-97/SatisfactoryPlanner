@@ -466,6 +466,7 @@
                                         <StackPanel>
                                             <CheckBox x:Name="HandCheck" Content="{Binding [chk.byHand], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.byHand], Source={x:Static local:Loc.Instance}}" Click="HandCheck_Click"/>
                                             <CheckBox x:Name="TankCheck" Content="{Binding [chk.bigTank], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.bigTank], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="TankCheck_Click"/>
+                                            <CheckBox x:Name="ColumnsCheck" Content="{Binding [chk.columns], Source={x:Static local:Loc.Instance}}" ToolTip="{Binding [tip.columns], Source={x:Static local:Loc.Instance}}" Margin="0,6,0,0" Click="ColumnsCheck_Click"/>
                                             <TextBlock Text="{Binding [lbl.timeLimit], Source={x:Static local:Loc.Instance}}" FontWeight="SemiBold" Margin="0,12,0,2"/>
                                             <DockPanel>
                                                 <TextBlock x:Name="TimeLimitText" DockPanel.Dock="Right" Width="50" TextAlignment="Right" VerticalAlignment="Center"/>

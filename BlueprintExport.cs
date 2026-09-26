@@ -43,6 +43,28 @@ public static class BlueprintExport
     const double FloorTop = 400, BeltZ = FloorTop + 100, PipeZ = FloorTop + 175;
     static string Build(string desc) => desc.StartsWith("Desc_") ? "Build_" + desc[5..] : desc;
 
+    /// <summary>A building's facing in the game (degrees), as the export places it.</summary>
+    static double YawOf(Placed b, (string name, double x, double y, double z, bool input, bool pipe)[] ports)
+    {
+        double yaw = b.Kind switch
+        {
+            "input" => ports.First(p => !p.input).y > 0 ? 180 : 0,
+            "output" or "surplus" => ports.First(p => p.input).y < 0 ? 0 : 180,
+            _ => (ports.Where(p => p.input).Average(p => p.y) < 0 ? 180 : 0) + (b.Flipped ? 180 : 0),
+        };
+        return ((yaw - 90 * b.Rot) % 360 + 360) % 360;
+    }
+
+    /// <summary>Where a placed building's ports end up, in layout metres (x east, y north; z above its floor's port
+    /// height) — the export's own placement, so a layout can draw its belts onto them exactly.</summary>
+    public static List<(string name, double x, double y, double z, bool input, bool pipe)> PortsOf(Placed b)
+    {
+        if (!Ports.TryGetValue(Build(b.Building), out var ports)) return new();
+        double yaw = YawOf(b, ports), c = Math.Cos(yaw * Math.PI / 180), sn = Math.Sin(yaw * Math.PI / 180);
+        double X = (b.X + b.W / 2) * 100, Y = -(b.Y + b.H / 2) * 100;
+        return ports.Select(p => (p.name, (X + p.x * c - p.y * sn) / 100, -(Y + p.x * sn + p.y * c) / 100, (p.z - 100) / 100, p.input, p.pipe)).ToList();
+    }
+
     /// <summary>Where a belt / pipe was cut at a tile border: join these two ends after placing both tiles.</summary>
     public record Joint(string item, string tileA, string tileB, double x, double y, double z = 0); // x, y in foundations; z in cm (blueprint frame)
 
@@ -92,14 +114,8 @@ public static class BlueprintExport
             if (!Ports.TryGetValue(cls, out var ports)) { warnings.Add($"no blueprint data for {b.Building} — skipped"); continue; }
             // machines: inputs to the south (game +Y); our boxes connect on their north side only — input boxes need
             // their output end there, output / spare boxes their input end
-            double yaw = b.Kind switch
-            {
-                "input" => ports.First(p => !p.input).y > 0 ? 180 : 0,
-                "output" or "surplus" => ports.First(p => p.input).y < 0 ? 0 : 180,
-                _ => (ports.Where(p => p.input).Average(p => p.y) < 0 ? 180 : 0) + (b.Flipped ? 180 : 0),
-            };
-            // place & route turns cells counter-clockwise (layout frame, north up) = clockwise in the game frame (Y south)
-            yaw = ((yaw - 90 * b.Rot) % 360 + 360) % 360;
+            // (place & route turns cells counter-clockwise (layout frame, north up) = clockwise in the game frame (Y south))
+            double yaw = YawOf(b, ports);
             var (X, Y) = G(b.X + b.W / 2, b.Y + b.H / 2);
             string id = $"b{n++}";
             if (TileOf(G(b.X + 0.01, 0).X, 0) != TileOf(G(b.X + b.W - 0.01, 0).X, 0) || TileOf(0, G(0, b.Y + 0.01).Y) != TileOf(0, G(0, b.Y + b.H - 0.01).Y))

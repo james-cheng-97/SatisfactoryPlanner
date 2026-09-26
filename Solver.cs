@@ -48,6 +48,9 @@ public class Settings
     public bool IndustrialFluidBox { get; set; }
     /// <summary>How long the place &amp; route planner may search (s). Short limits make big plans fall back to the row layout.</summary>
     public int LayoutSeconds { get; set; } = 120;
+    /// <summary>Layout engine: "pnr" (place &amp; route, default) or "columns" (experimental: one column per production
+    /// step, like the player's hand-built factory — see docs/LAYOUT_DESIGN.md §2.10f).</summary>
+    public string LayoutEngine { get; set; } = "pnr";
     /// <summary>Window arrangement: "auto" (tall window → the settings go across the top), "wide" or "tall". App-wide.</summary>
     public string ScreenLayout { get; set; } = "auto";
     /// <summary>Compact menus (icon rail, one-line summary): "auto" (small windows, e.g. 1080 × 1920), "on" or "off". App-wide.</summary>

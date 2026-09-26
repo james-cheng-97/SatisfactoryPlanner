@@ -203,6 +203,20 @@ made 184 × 216 m, 20 blueprints, 3.4 km of belt for the same plan (place & rout
    inputs / outputs sit at ~4 m pitch in one bank, not as separate PCB-style pads (pipes the same, a small tank
    where a pipe input needs one).
 
+### 2.10g Columns engine (`Columns.cs`, Advanced → "Columns layout (experimental)", `Settings.LayoutEngine`)
+Deterministic, fast. Columns in flow order (steps may share a column; tall machines packed among themselves when there
+are floors), machines turned so inputs face west, flush with the column's west face. Corridor = distribute tracks of
+the east column + collect tracks of the west one, one height each (ground track by the machines when that side has no
+pipes; 2 / 4 / 6 m raised), a lift at each port (`BlueprintExport.PortsOf` gives the export's exact port positions).
+Header rows 8 m up north of the columns (pipes on the ground), packed so non-overlapping spans share a y; inputs as a
+bank at the west edge, product boxes at the east edge. Two floors: tall / pipe columns on the ground (open above),
+every assignment of the other columns tried, header rows share y across floors, a lift + passthrough per item that
+changes floors. A few column heights are tried; the smallest wins. Falls back to place & route if it fails.
+Status (2026-09-26, lab notes artifact "Columns Engine Lab Notes"): motor plan, matched scope, 2 floors: 112 × 104 m =
+2.65× the player's factory, 0 export warnings (full plan 3.15×). Next: U-turn corridors (merger chain → splitter chain
+of the next column), header only for items that skip columns, side chains upstairs above their consumer.
+Test: scratchpad `QUICK=16 [SCOPE=matched] [FLOORS=2] [TAG=..]`.
+
 ### 2.11 In-game test saves (scratchpad `bp/`)
 `inject.js` puts a factory's tile blueprints (write.js objects, `DUMP_OBJECTS=1`) into a copy of a save, 50 m east / 100 m
 up from the player (`STRIP=1` removes an earlier injection: names 2100000000–2100099999). `testrun.js` then joins every

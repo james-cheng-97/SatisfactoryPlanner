@@ -114,6 +114,7 @@ public partial class MainWindow : Window
         HandCheck.IsChecked = _settings.HandPlaceAcrossTiles;
         HandCheck.IsEnabled = _settings.BlueprintTile > 0;
         TankCheck.IsChecked = _settings.IndustrialFluidBox;
+        ColumnsCheck.IsChecked = _settings.LayoutEngine == "columns";
         TimeLimitSlider.Value = _settings.LayoutSeconds;
         TimeLimitText.Text = FormatTime(_settings.LayoutSeconds);
         MinerCombo.SelectedValue = _settings.Miner;
@@ -921,6 +922,14 @@ public partial class MainWindow : Window
         if (o.Key == (_settings.ClogHandling.GetValueOrDefault(g.Item) ?? "")) return;
         if (o.Key == "") _settings.ClogHandling.Remove(g.Item); else _settings.ClogHandling[g.Item] = o.Key;
         Dispatcher.BeginInvoke(Recalculate);
+    }
+
+    void ColumnsCheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.LayoutEngine = ColumnsCheck.IsChecked == true ? "columns" : "pnr";
+        _layoutDirty = true;
+        if (MainTabs.SelectedItem == LayoutTab) RenderLayout();
     }
 
     void TankCheck_Click(object sender, RoutedEventArgs e)
