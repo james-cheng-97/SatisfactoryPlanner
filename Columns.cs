@@ -18,9 +18,9 @@ namespace SatisfactoryPlanner;
 /// </summary>
 public static class Columns
 {
-    const double TrackPitch = 2.5;   // between parallel tracks in a corridor (neighbours sit at other heights)
+    const double TrackPitch = 2;     // between parallel tracks in a corridor (neighbours sit at other heights)
     const double LiftOut = 1;        // a lift stands 1 m past the machine face and plugs into the port
-    const double TrackFromLift = 2;  // lift → first track
+    const double TrackFromLift = 2;  // lift → first track (1.5 m: the lift and the splitter overlap)
     const double RowPitch = 4;       // header rows (and the input bank): two lifts side by side need ~4 m
     const double HeaderZ = 8;        // header rows' height (belts, above the 2 / 4 / 6 m tracks); pipes stay on the ground
     const double ColumnGap = 2;      // between two machine groups stacked in one column
@@ -51,10 +51,18 @@ public static class Columns
     public static Layout? Build(Plan plan, Settings s, List<string>? log = null)
     {
         Layout? best = null; List<string>? bestLog = null;
-        foreach (double k in new[] { 0.6, 0.75, 0.9, 1.0, 1.15, 1.3, 1.5, 1.8 })
+        // mask -1: floors by column; mask ≥ 0: floors by branch, that split of the branches (laid out for real: the
+        // weights alone don't know that nothing upstairs may stand above the tall machines)
+        for (int mask = -1; mask < 64; mask++)
+        foreach (double k in new[] { 0.6, 0.75, 0.9, 1.0, 1.15, 1.3, 1.5, 1.8, 2.1, 2.5, 3.0 })
         {
+            if (mask >= 0 && s.Floors < 2) break;
+            if (Environment.GetEnvironmentVariable("COLS_MODE") is { } cm && (cm == "branch") != (mask >= 0)) continue;
             var l = new List<string>();
-            var L = BuildOnce(plan, s, k, l);
+            bool tooMany = false;
+            var L = BuildOnce(plan, s, k, mask, l, () => tooMany = true);
+            if (tooMany) break;
+            l.Insert(0, mask >= 0 ? $"floors by branch (split {mask})" : "floors by column");
             if (L == null) continue;
             if (best == null || L.Width * L.Height < best.Width * best.Height - 1 || Math.Abs(L.Width * L.Height - best.Width * best.Height) <= 1 && L.BeltLength < best.BeltLength)
                 (best, bestLog) = (L, l);
@@ -63,7 +71,7 @@ public static class Columns
         return best;
     }
 
-    static Layout? BuildOnce(Plan plan, Settings s, double capScale, List<string>? log)
+    static Layout? BuildOnce(Plan plan, Settings s, double capScale, int branchMask, List<string>? log, Action? noSuchSplit = null)
     {
         var nodes = plan.Nodes.GroupBy(n => n.Key).ToDictionary(g => g.Key, g => g.First());
         var machineNodes = nodes.Values.Where(n => n.Kind == NodeKind.Machine && n.Recipe != null && n.Machines > 0).ToList();
@@ -93,12 +101,56 @@ public static class Columns
         double maxLen = groups.Max(Len), sumLen = groups.Sum(Len);
         double capH = Math.Max(maxLen, Math.Sqrt(sumLen * ColumnPitch / floors) * capScale);
         bool IsTall(Group g) => Layout.HeightOf(g.Node.Building!) > 15;
+        bool HasFluid(Group g) => g.Node.Recipe!.In.Concat(g.Node.Recipe!.Out).Any(a => GameData.Item(a.Item).IsFluid);
         var cols = new List<Col>();
+
+        // ---- floors by branch (the player's way): the product is the root of a tree, its inputs' makers the branches;
+        //      each branch's weight is its machines' column length. Branches go to the floor that balances the weight
+        //      (tall machines, pipe users, the root and anything shared by several branches on the ground); every split
+        //      is tried, ties go to fewer items crossing floors. Each floor then gets its own columns, stacked.
+        Dictionary<Group, int>? groupFloor = null;
+        if (branchMask >= 0 && floors > 1)
+        {
+            var outEdges = plan.Edges.GroupBy(e => e.From).ToDictionary(g => g.Key, g => g.Select(e => e.To).Distinct().ToList());
+            var byKey = groups.ToDictionary(g => g.Node.Key);
+            var rootKeys = groups.Where(g => (outEdges.GetValueOrDefault(g.Node.Key) ?? []).Any(t => nodes.TryGetValue(t, out var n) && n.Kind == NodeKind.Target))
+                .Select(g => g.Node.Key).ToHashSet();
+            var children = groups.Where(g => !rootKeys.Contains(g.Node.Key) && (outEdges.GetValueOrDefault(g.Node.Key) ?? []).Any(rootKeys.Contains)).ToList();
+            var memo = new Dictionary<string, HashSet<string>>(); var onPath = new HashSet<string>();
+            HashSet<string> Br(string key)
+            {
+                if (memo.TryGetValue(key, out var m)) return m;
+                if (rootKeys.Contains(key) || !onPath.Add(key)) return new();
+                var r = new HashSet<string>();
+                if (children.Any(c => c.Node.Key == key)) r.Add(key);
+                else foreach (var t in outEdges.GetValueOrDefault(key) ?? []) if (byKey.ContainsKey(t)) r.UnionWith(Br(t));
+                onPath.Remove(key);
+                return memo[key] = r;
+            }
+            var branchOf = groups.ToDictionary(g => g, g => Br(g.Node.Key));
+            bool Forced(Group g) => IsTall(g) || HasFluid(g) || rootKeys.Contains(g.Node.Key) || branchOf[g].Count != 1;
+            if (rootKeys.Count > 0 && children.Count is > 0 and <= 6 && branchMask < 1 << children.Count)
+            {
+                int bestMask = branchMask;
+                groupFloor = groups.ToDictionary(g => g, g => Forced(g) ? 0 : (bestMask >> children.FindIndex(c => c.Node.Key == branchOf[g].First()) & 1) == 1 ? 1 : 0);
+                log?.Add($"branches: {string.Join(", ", children.Select(c => $"{GameData.Item(c.Node.Item).Name} (weight {groups.Where(g => branchOf[g].SetEquals([c.Node.Key])).Sum(Len):0} m) → F{groupFloor[c] + 1}"))}");
+            }
+            else { noSuchSplit?.Invoke(); return null; }
+        }
+
         // (with floors, tall machines — ground only — are packed among themselves, like the player's refinery column)
-        var runs = floors > 1 ? [groups.Where(IsTall).ToList(), groups.Where(g => !IsTall(g)).ToList()] : new List<List<Group>> { groups };
+        var runs = groupFloor != null
+            ? [groups.Where(IsTall).ToList(), groups.Where(g => !IsTall(g) && groupFloor[g] == 0).ToList(), groups.Where(g => groupFloor[g] == 1).ToList()]
+            : floors > 1 ? [groups.Where(IsTall).ToList(), groups.Where(g => !IsTall(g)).ToList()] : new List<List<Group>> { groups };
         var packed = new List<(int depth, List<Group> gs)>();
         foreach (var run in runs.Where(r => r.Count > 0))
         {
+            if (groupFloor != null)
+            {
+                // a floor's own column height: about square for what that floor holds
+                int fl = groupFloor[run[0]];
+                capH = Math.Max(maxLen, Math.Sqrt(groups.Where(g => groupFloor[g] == fl).Sum(Len) * ColumnPitch) * capScale);
+            }
             var cur = new List<Group>();
             foreach (var g in run.OrderBy(g => g.Depth).ThenByDescending(Len))
             {
@@ -114,7 +166,7 @@ public static class Columns
             if (cur.Count > 0) packed.Add((cur.Min(v => v.Depth), cur));
         }
         // columns west → east in flow order (by their earliest step)
-        foreach (var (_, gs) in packed.OrderBy(p => p.depth)) cols.Add(new Col { Index = cols.Count, Groups = gs });
+        foreach (var (_, gs) in packed.OrderBy(p => p.depth)) cols.Add(new Col { Index = cols.Count, Groups = gs, Floor = groupFloor != null ? groupFloor[gs[0]] : 0 });
         foreach (var c in cols)
         {
             c.Outs = c.Groups.SelectMany(g => g.Node.Recipe!.Out.Select(a => a.Item)).Distinct()
@@ -186,7 +238,7 @@ public static class Columns
             eastX = LayoutFloor(cols, inputBankX + 6);
         else
         {
-            foreach (var c in cols) c.Floor = c.Tall || c.Fluids ? 0 : 1;
+            if (groupFloor == null) foreach (var c in cols) c.Floor = c.Tall || c.Fluids ? 0 : 1;
             double Width(out double groundEnd)
             {
                 var g0 = cols.Where(c => c.Floor == 0).ToList(); var g1 = cols.Where(c => c.Floor == 1).ToList();
@@ -197,7 +249,7 @@ public static class Columns
                 return Math.Max(groundEnd, upEnd);
             }
             // every way to put the free columns (no tall machines, no pipes) on either floor: the narrowest wins
-            var free = cols.Where(c => !c.Tall && !c.Fluids).ToList();
+            var free = groupFloor != null ? new List<Col>() : cols.Where(c => !c.Tall && !c.Fluids).ToList();
             if (free.Count <= 12)
             {
                 int bestMask = 0; double bestW = double.MaxValue;
@@ -445,6 +497,8 @@ public static class Columns
         double maxY = Math.Max(top, L.Buildings.Select(b => b.Y + b.H).Max()) + 2;
         L.Width = Math.Ceiling(maxX / Layout.Foundation) * Layout.Foundation;
         L.Height = Math.Ceiling(maxY / Layout.Foundation) * Layout.Foundation;
+        foreach (var c in cols.OrderBy(c => c.Floor).ThenBy(c => c.X0))
+            log?.Add($"  F{c.Floor + 1} x {c.X0:0}–{c.X1:0}: in [{string.Join(", ", c.Ins.Select(i => GameData.Item(i.item).Name))}] out [{string.Join(", ", c.Outs.Select(i => GameData.Item(i.item).Name))}]");
         log?.Add($"columns: {cols.Count} ({string.Join(" | ", cols.Select(c => (floors > 1 ? $"F{c.Floor + 1} " : "") + string.Join(", ", c.Groups.Select(g => $"{g.Node.Machines}× {GameData.Item(g.Node.Item).Name}"))))}), {L.Width:0} × {L.Height:0} m");
         return L;
     }

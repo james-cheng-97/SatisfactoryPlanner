@@ -215,9 +215,16 @@ Header rows 8 m up north of the columns (pipes on the ground), packed so non-ove
 bank at the west edge, product boxes at the east edge. Two floors: tall / pipe columns on the ground (open above),
 every assignment of the other columns tried, header rows share y across floors, a lift + passthrough per item that
 changes floors. A few column heights are tried; the smallest wins. Falls back to place & route if it fails.
+**Floors by branch** (the player's method, user 2026-09-26): the plan is a tree rooted at the product; its inputs'
+makers are the branches (motor: stator branch, rotor branch), each weighted by its machines' column length. Every
+split of the branches over the floors is laid out for real (weights alone miss that nothing upstairs may stand over
+tall machines); tall machines, pipe users, the root and anything shared by several branches stay on the ground. Picks
+the player's arrangement on the motor plan (stator branch down, steel / rods / screws / rotors up). Tried next to the
+column-based split; the smaller wins. Track pitch 2 m; lift → track 2 m (1.5 m: lifts overlap splitters).
 Status (2026-09-26, lab notes artifact "Columns Engine Lab Notes"): the player's exact motor plan (41 machines), 2 floors:
-152 × 112 m = 2.11× their 70 × 115 m (1.59× their 93 × 115 m with the water extractors), 0 export warnings; the old
-designer 3.67×. Test: `QUICK=16 SCOPE=player FLOORS=2`. Next: U-turn corridors (merger chain → splitter chain
+160 × 104 m = 2.07× their 70 × 115 m (1.56× their 93 × 115 m with the water extractors), 0 export warnings; the old
+designer 3.67×. Remaining gap: 5 ground columns (80 m of machine depth) vs their 3 (40 m) — items made and used in one
+column (ingot → sheet, stator → motor) cost a collect + distribute track and a header row; they hand over in-column. Test: `QUICK=16 SCOPE=player FLOORS=2`. Next: U-turn corridors (merger chain → splitter chain
 of the next column), header only for items that skip columns, side chains upstairs above their consumer.
 Test: scratchpad `QUICK=16 [SCOPE=matched] [FLOORS=2] [TAG=..]`.
 
