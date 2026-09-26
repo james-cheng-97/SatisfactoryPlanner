@@ -189,10 +189,13 @@ Tests: scratchpad `QUICK=10 CLOG=.. CLOG2=..` (loop resin chain), `QUICK=12` (he
 - Only product outputs keep a box.
 
 ### 2.10f The player's hand-built motor factory (Eorzea Cafe, 2026-09-26) — the target for a columns engine
-10 motors / min (wire, pipe from iron; copper rotors) in **57 × 77 m on 2 levels, ~590 m of belt, 1 box**; the designer
-made 184 × 216 m, 20 blueprints, 3.4 km of belt for the same plan (place & route fell back to rows). How it's built:
-1. **One column per production step**, machines packed at their own width: refineries (10 m pitch) → wire / pipe
-   constructors (8 m) → stator assemblers (9 m) → the 2 motor assemblers side by side at the end, output box after them.
+10 motors / min, 41 machines (10 refineries: copper ingot, copper sheet, pure iron; a Solid Steel foundry; 8 iron wire,
+3 iron pipe, 2 steel rod, 9 screw constructors; 4 stator, 2 copper rotor, 2 motor assemblers) and 2 water extractors in
+**93 × 115 m (70 × 115 m without the extractors) on 2 levels, 1 box**. (A first capture took only 57 × 77 m of it.)
+The old designer made 176 × 168 m on 2 floors for the same plan. How it's built:
+1. **One column per production step**, machines packed at their own width: all 10 refineries in one column (10 m
+   pitch) → wire / pipe / steel-rod constructors (8 m) and the foundry → stator assemblers (9 m) → the 2 motor
+   assemblers side by side at the end, output box after them.
 2. **One belt corridor between neighbouring columns**: the producers' merger chain runs straight on as the
    consumers' splitter chain; nothing crosses the factory.
 3. **Manifolds run raised, lifts go straight from a splitter into a machine / from a machine up into a merger**, so the
@@ -212,8 +215,9 @@ Header rows 8 m up north of the columns (pipes on the ground), packed so non-ove
 bank at the west edge, product boxes at the east edge. Two floors: tall / pipe columns on the ground (open above),
 every assignment of the other columns tried, header rows share y across floors, a lift + passthrough per item that
 changes floors. A few column heights are tried; the smallest wins. Falls back to place & route if it fails.
-Status (2026-09-26, lab notes artifact "Columns Engine Lab Notes"): motor plan, matched scope, 2 floors: 112 × 104 m =
-2.65× the player's factory, 0 export warnings (full plan 3.15×). Next: U-turn corridors (merger chain → splitter chain
+Status (2026-09-26, lab notes artifact "Columns Engine Lab Notes"): the player's exact motor plan (41 machines), 2 floors:
+152 × 112 m = 2.11× their 70 × 115 m (1.59× their 93 × 115 m with the water extractors), 0 export warnings; the old
+designer 3.67×. Test: `QUICK=16 SCOPE=player FLOORS=2`. Next: U-turn corridors (merger chain → splitter chain
 of the next column), header only for items that skip columns, side chains upstairs above their consumer.
 Test: scratchpad `QUICK=16 [SCOPE=matched] [FLOORS=2] [TAG=..]`.
 
